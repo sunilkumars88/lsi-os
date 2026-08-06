@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #eef3f1;
+  --surface: #f7faf8;
+  --surface-2: #e4ece8;
+  --surface-3: #d7e3dd;
+  --ink: #10241f;
+  --ink-muted: #4d655c;
+  --ink-inverse: #f4faf7;
+  --line: #c5d4cc;
+  --accent: #0f766e;
+  --accent-ink: #0b3f3a;
+  --accent-soft: rgba(15, 118, 110, 0.12);
+  --danger: #b42318;
+  --hero-glow: radial-gradient(ellipse 80% 60% at 70% 20%, rgba(45, 212, 191, 0.28), transparent 55%),
+    radial-gradient(ellipse 60% 50% at 15% 80%, rgba(15, 118, 110, 0.18), transparent 50%),
+    linear-gradient(160deg, #0b1f1c 0%, #134e4a 42%, #0f766e 72%, #99f6e4 140%);
+}
+
+@theme inline {
+  --color-background: var(--bg);
+  --color-foreground: var(--ink);
+  --font-sans: var(--font-body), "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-body);
+  background-image:
+    radial-gradient(circle at 12% 8%, rgba(15, 118, 110, 0.07), transparent 28%),
+    radial-gradient(circle at 88% 0%, rgba(20, 83, 70, 0.06), transparent 32%),
+    linear-gradient(180deg, #f4f8f6 0%, #eef3f1 100%);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(15, 118, 110, 0.22);
+}
+
+.prose-chat p {
+  margin: 0.4rem 0;
+}
+
+.prose-chat strong {
+  font-weight: 600;
+}
