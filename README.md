@@ -30,6 +30,8 @@ Visit **http://localhost:3000**
 
 **Demo login:** `admin@lsi.os` / `demo1234`
 
+On Vercel, the Next.js app includes a same-origin `/api/v1` backend so login and all modules work without a separate FastAPI host. For local FastAPI instead, set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `apps/web/.env.local`.
+
 ## One-command Docker
 
 ```bash

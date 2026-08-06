@@ -35,6 +35,9 @@ export default function LoginPage() {
           LSI<span className="text-[var(--accent)]">-OS</span>
         </div>
         <p className="mt-2 text-sm text-[var(--ink-muted)]">Sign in to your intelligence workspace.</p>
+        <div className="mt-4 rounded-md bg-[var(--accent-soft)] px-3 py-2 text-sm text-[var(--accent-ink)]">
+          Demo admin: <strong>admin@lsi.os</strong> / <strong>demo1234</strong>
+        </div>
         <form onSubmit={onSubmit} className="mt-6 space-y-4">
           <div>
             <label className="mb-1 block text-sm">Email</label>
