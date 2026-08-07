@@ -2,15 +2,15 @@ import Link from "next/link";
 import { Button, Panel } from "@/components/ui";
 
 const plans = [
-  { name: "Freemium", price: "$0", points: ["Demo brain AI", "1 workspace", "Public data explorers"] },
-  { name: "Professional", price: "$1,200/mo", points: ["LLM routing", "RAG knowledge", "Agent Studio"] },
-  { name: "Enterprise", price: "Custom", points: ["SSO/RBAC", "Audit & cost meters", "Dedicated deployment"] },
+  { name: "Core OS", price: "Pilot", points: ["Command Center", "Memory + RAG", "Agent runtime", "1 industry pack"] },
+  { name: "Professional", price: "SaaS", points: ["Connectors hub", "Approvals", "Data rights registry", "Model router"] },
+  { name: "Enterprise", price: "Custom", points: ["BYOK / VPC", "Extra packs", "Audit & SSO", "Marketplace"] },
 ];
 
 export default function PricingPage() {
   return (
     <div className="mx-auto max-w-5xl px-6 py-16">
-      <Link href="/" className="text-sm text-[var(--accent)]">← LSI-OS</Link>
+      <Link href="/" className="text-sm text-[var(--accent)]">← EIOS</Link>
       <h1 className="mt-6 font-[family-name:var(--font-display)] text-4xl">Pricing</h1>
       <div className="mt-10 grid gap-5 md:grid-cols-3">
         {plans.map((p) => (
@@ -26,7 +26,7 @@ export default function PricingPage() {
         ))}
       </div>
       <Link href="/register" className="mt-8 inline-block">
-        <Button>Start with demo</Button>
+        <Button>Start demo</Button>
       </Link>
     </div>
   );

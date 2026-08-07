@@ -21,4 +21,5 @@ apps/api/*.db
 apps/web/.env.local
 infra/.env
 _extracted/
+_lios_extracted/
 .vercel/

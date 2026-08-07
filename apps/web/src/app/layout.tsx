@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, Source_Sans_3 } from "next/font/google";
 import { AuthProvider } from "@/lib/auth";
+import { PackProvider } from "@/lib/pack-context";
 import "./globals.css";
 
 const display = Fraunces({
@@ -14,16 +15,18 @@ const body = Source_Sans_3({
 });
 
 export const metadata: Metadata = {
-  title: "LSI-OS — Life Sciences Intelligence OS",
+  title: "Enterprise Intelligence OS — AI that runs enterprise work",
   description:
-    "AI-native operating system for commercial, medical, clinical, regulatory, and pharmacovigilance intelligence.",
+    "Connect systems, ground answers in enterprise knowledge, orchestrate agents and governed workflows. Industry packs for Life Sciences, Banking, Insurance, and more.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
       <body className={`${display.variable} ${body.variable} antialiased`}>
-        <AuthProvider>{children}</AuthProvider>
+        <AuthProvider>
+          <PackProvider>{children}</PackProvider>
+        </AuthProvider>
       </body>
     </html>
   );

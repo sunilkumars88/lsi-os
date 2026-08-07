@@ -11,7 +11,6 @@ import {
   MessageSquare,
   Package,
   Scale,
-  Search,
   Settings,
   ShieldAlert,
   ShieldCheck,
@@ -21,33 +20,59 @@ import {
   LogOut,
   Menu,
   X,
+  Network,
+  Plug,
+  GitBranch,
+  Layers,
+  Route,
+  CheckSquare,
+  type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
+import { usePack } from "@/lib/pack-context";
+import { CORE_OS_NAV } from "@/lib/packs";
 import { cx } from "./ui";
 
-const nav = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/copilot", label: "AI Copilot", icon: MessageSquare },
-  { href: "/agents", label: "Agent Studio", icon: Bot },
-  { href: "/knowledge", label: "Knowledge Hub", icon: BookOpen },
-  { href: "/workflows", label: "Workflows", icon: Workflow },
-  { href: "/commercial", label: "Commercial", icon: ChartColumnIncreasing },
-  { href: "/medical", label: "Medical Affairs", icon: BriefcaseMedical },
-  { href: "/clinical", label: "Clinical", icon: FlaskConical },
-  { href: "/heor", label: "HEOR / RWE", icon: Activity },
-  { href: "/regulatory", label: "Regulatory", icon: Scale },
-  { href: "/safety", label: "Pharmacovigilance", icon: ShieldAlert },
-  { href: "/marketplace", label: "Marketplace", icon: Package },
-  { href: "/admin", label: "Admin", icon: ShieldCheck },
-  { href: "/settings", label: "Settings", icon: Settings },
-];
+const iconMap: Record<string, LucideIcon> = {
+  "/dashboard": LayoutDashboard,
+  "/copilot": MessageSquare,
+  "/agents": Bot,
+  "/workflows": Workflow,
+  "/approvals": CheckSquare,
+  "/knowledge": BookOpen,
+  "/graph": GitBranch,
+  "/data-rights": ShieldCheck,
+  "/integrations": Plug,
+  "/router": Route,
+  "/industry-packs": Layers,
+  "/marketplace": Package,
+  "/admin": ShieldCheck,
+  "/settings": Settings,
+  "/commercial": ChartColumnIncreasing,
+  "/medical": BriefcaseMedical,
+  "/clinical": FlaskConical,
+  "/heor": Activity,
+  "/regulatory": Scale,
+  "/safety": ShieldAlert,
+};
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, loading, logout } = useAuth();
+  const { pack, packs, setPackId } = usePack();
   const [open, setOpen] = useState(false);
+
+  const groups = useMemo(() => {
+    const map = new Map<string, typeof CORE_OS_NAV>();
+    for (const item of CORE_OS_NAV) {
+      const list = map.get(item.group) || ([] as unknown as typeof CORE_OS_NAV);
+      (list as unknown as (typeof CORE_OS_NAV)[number][]).push(item);
+      map.set(item.group, list);
+    }
+    return [...map.entries()];
+  }, []);
 
   if (!loading && !user) {
     router.replace("/login");
@@ -59,45 +84,99 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-screen">
         <aside
           className={cx(
-            "fixed inset-y-0 left-0 z-40 w-72 border-r border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur transition-transform lg:static lg:translate-x-0",
+            "fixed inset-y-0 left-0 z-40 w-[19rem] border-r border-[var(--line)] bg-[var(--surface)]/95 backdrop-blur transition-transform lg:static lg:translate-x-0",
             open ? "translate-x-0" : "-translate-x-full",
           )}
         >
           <div className="flex h-16 items-center justify-between px-5">
             <Link href="/dashboard" className="font-[family-name:var(--font-display)] text-xl tracking-tight">
-              LSI<span className="text-[var(--accent)]">-OS</span>
+              EIOS
             </Link>
             <button className="lg:hidden" onClick={() => setOpen(false)} aria-label="Close menu">
               <X size={18} />
             </button>
           </div>
+
           <div className="px-4 pb-3">
-            <div className="flex items-center gap-2 rounded-md border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-sm text-[var(--ink-muted)]">
-              <Search size={14} />
-              <span>Search-first workspace</span>
-            </div>
+            <label className="mb-1 block text-[11px] uppercase tracking-wide text-[var(--ink-muted)]">Industry pack</label>
+            <select
+              className="w-full rounded-md border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-sm"
+              value={pack.id}
+              onChange={(e) => setPackId(e.target.value)}
+            >
+              {packs.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.short} {p.status === "active" ? "· live" : p.status === "available" ? "· available" : "· roadmap"}
+                </option>
+              ))}
+            </select>
           </div>
-          <nav className="space-y-0.5 px-3 pb-8">
-            {nav.map((item) => {
-              const active = pathname.startsWith(item.href);
-              const Icon = item.icon;
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setOpen(false)}
-                  className={cx(
-                    "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition",
-                    active
-                      ? "bg-[var(--accent-soft)] text-[var(--accent-ink)] font-medium"
-                      : "text-[var(--ink-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
-                  )}
-                >
-                  <Icon size={16} />
-                  {item.label}
-                </Link>
-              );
-            })}
+
+          <nav className="space-y-4 px-3 pb-8">
+            {groups.map(([group, items]) => (
+              <div key={group}>
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+                  Core OS · {group}
+                </div>
+                <div className="space-y-0.5">
+                  {items.map((item) => {
+                    const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+                    const Icon = iconMap[item.href] || Network;
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={cx(
+                          "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition",
+                          active
+                            ? "bg-[var(--accent-soft)] font-medium text-[var(--accent-ink)]"
+                            : "text-[var(--ink-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                        )}
+                      >
+                        <Icon size={16} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+
+            {pack.status === "active" ? (
+              <div>
+                <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
+                  Pack · {pack.short}
+                </div>
+                <div className="space-y-0.5">
+                  {pack.modules.map((item) => {
+                    const active = pathname.startsWith(item.href);
+                    const Icon = iconMap[item.href] || Layers;
+                    return (
+                      <Link
+                        key={item.href + item.label}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={cx(
+                          "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition",
+                          active
+                            ? "bg-[var(--accent-soft)] font-medium text-[var(--accent-ink)]"
+                            : "text-[var(--ink-muted)] hover:bg-[var(--surface-2)] hover:text-[var(--ink)]",
+                        )}
+                      >
+                        <Icon size={16} />
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="mx-3 rounded-md border border-dashed border-[var(--line)] p-3 text-xs text-[var(--ink-muted)]">
+                {pack.short} pack is {pack.status}. Core OS stays available; domain modules activate when the pack is
+                enabled.
+              </div>
+            )}
           </nav>
         </aside>
 
@@ -107,7 +186,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu size={20} />
             </button>
             <div className="text-sm text-[var(--ink-muted)]">
-              {user?.org_name || "Organization"} · {user?.role}
+              {user?.org_name || "Organization"} · {pack.short} · {user?.role}
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right text-sm">

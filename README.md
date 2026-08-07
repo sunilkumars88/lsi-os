@@ -1,69 +1,43 @@
-# LSI-OS — Life Sciences Intelligence OS
+# Enterprise Intelligence OS (EIOS)
 
-AI-native operating system for pharma, biotech, CRO, and healthcare teams. Combines agentic AI, RAG knowledge, live public data (ClinicalTrials.gov, OpenFDA, PubMed), and domain modules in one workspace.
+AI-native **Enterprise Intelligence Operating System** — not a ChatGPT wrapper.
 
-## Stack
+Connect enterprise systems, ground answers in governed knowledge, orchestrate agents with human approvals, and run industry packs (Life Sciences first).
 
-| Layer | Tech |
+## Why it beats a general LLM
+
+A general LLM can summarize a paper. EIOS can retrieve approved content, pull live clinical/safety sources, check permissions, run multi-step agents, require approvals, assign follow-ups, and write audit trails inside a tenant.
+
+| Layer | Role |
 |-------|------|
-| Web | Next.js 15, React, Tailwind, Framer Motion |
-| API | FastAPI, SQLAlchemy, JWT/RBAC |
-| Data | SQLite (local) or PostgreSQL + Redis + MinIO (Docker) |
-| AI | LLM router (OpenAI / Anthropic / demo brain), RAG, multi-agent tools |
+| L5 | Customer private intelligence |
+| L4 | Industry packs |
+| L3 | Proprietary OS intelligence (ontology, workflows, agents) |
+| L2 | Multi-LLM router |
+| L1 | Cloud, security, data platform |
 
-## Quick start (2 terminals)
+## Quick start
 
 ```bash
-# 1) API
-cd apps/api
-python -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
-.\.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
-
-# 2) Web
 cd apps/web
 npm install
 npm run dev
 ```
 
-Visit **http://localhost:3000**
+Open http://localhost:3000 — demo `admin@lsi.os` / `demo1234`
 
-**Demo login:** `admin@lsi.os` / `demo1234`
+## Core OS modules
 
-On Vercel, the Next.js app includes a same-origin `/api/v1` backend so login and all modules work without a separate FastAPI host. For local FastAPI instead, set `NEXT_PUBLIC_API_URL=http://localhost:8000` in `apps/web/.env.local`.
+Command Center · Intelligence Copilot · Agent Runtime · Workflow Engine · Human Approvals · Enterprise Memory · Knowledge Graph · Data Rights Registry · Integration Hub · Model Router · Industry Packs · Marketplace · Governance
 
-## One-command Docker
+## Life Sciences pack (active)
 
-```bash
-docker compose -f infra/docker-compose.yml up --build
-```
+Commercial · Medical Affairs · Clinical · HEOR/RWE · Regulatory · Pharmacovigilance
 
-## Product surfaces
+## Data strategy
 
-- Marketing: Landing, Solutions, Pricing, Security, Contact
-- App: Dashboard, AI Copilot, Agent Studio, Knowledge Hub, Workflows
-- Domains: Commercial, Medical Affairs, Clinical, HEOR/RWE, Regulatory, Pharmacovigilance
-- Platform: Marketplace, Admin (users/audit/models/usage), Settings
+Data Rights Registry with GREEN / BLUE / YELLOW / RED zones. Government/open APIs for retrieval. Customer data tenant-isolated. Do not train on unclear rights.
 
-## Optional LLM keys
+## Deploy
 
-```bash
-set OPENAI_API_KEY=sk-...
-# or
-set ANTHROPIC_API_KEY=sk-ant-...
-```
-
-Without keys, Copilot and agents use the **demo brain** with full retrieval and tool execution.
-
-## Repository layout
-
-```
-apps/web      Next.js UI
-apps/api      FastAPI + AI platform
-infra/       Docker Compose
-data/seed/   Seed corpus
-docs/        Runbooks
-packages/    Shared constants
-```
-
-See [docs/RUNBOOK.md](docs/RUNBOOK.md) for operations notes.
+Vercel hosts the Next.js app (UI + same-origin `/api/v1`). Optional `OPENAI_API_KEY` for cloud synthesis/embeddings.

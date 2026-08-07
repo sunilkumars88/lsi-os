@@ -31,10 +31,8 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center px-4">
       <Panel className="w-full max-w-md">
-        <div className="font-[family-name:var(--font-display)] text-3xl">
-          LSI<span className="text-[var(--accent)]">-OS</span>
-        </div>
-        <p className="mt-2 text-sm text-[var(--ink-muted)]">Sign in to your intelligence workspace.</p>
+        <div className="font-[family-name:var(--font-display)] text-3xl tracking-tight">EIOS</div>
+        <p className="mt-2 text-sm text-[var(--ink-muted)]">Sign in to Enterprise Intelligence OS.</p>
         <div className="mt-4 rounded-md bg-[var(--accent-soft)] px-3 py-2 text-sm text-[var(--accent-ink)]">
           Demo admin: <strong>admin@lsi.os</strong> / <strong>demo1234</strong>
         </div>

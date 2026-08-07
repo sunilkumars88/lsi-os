@@ -624,6 +624,92 @@ async function handle(req: NextRequest, pathParts: string[]) {
     });
   }
 
+  if (path === "modules/integrations" && method === "GET") {
+    return json({
+      connectors: [
+        { id: "salesforce", name: "Salesforce CRM", category: "CRM", status: "available", description: "Accounts, HCPs, opportunities, field activity." },
+        { id: "veeva", name: "Veeva Vault / CRM", category: "Life Sciences", status: "connected", description: "Approved content, MLR artifacts, HCP interactions." },
+        { id: "sap", name: "SAP ERP", category: "ERP", status: "available", description: "Finance, supply, and commercial operations data." },
+        { id: "ctms", name: "Clinical Trial System", category: "Clinical", status: "connected", description: "Sites, enrollment, milestones (plus ClinicalTrials.gov)." },
+        { id: "safety-db", name: "Safety / PV system", category: "Safety", status: "connected", description: "ICSRs with OpenFDA FAERS enrichment." },
+        { id: "sharepoint", name: "Microsoft 365 / SharePoint", category: "Documents", status: "available", description: "SOPs, submissions, medical information." },
+        { id: "slack", name: "Slack / Teams", category: "Collab", status: "available", description: "Notifications, approvals, workflow alerts." },
+        { id: "servicenow", name: "ServiceNow", category: "ITSM", status: "roadmap", description: "Incident and change orchestration." },
+        { id: "fhir", name: "FHIR / HL7", category: "Interop", status: "available", description: "Healthcare provider interoperability adapters." },
+      ],
+    });
+  }
+
+  if (path === "modules/graph" && method === "GET") {
+    return json({
+      entities: [
+        { type: "Organization", count: 42 },
+        { type: "Product / Brand", count: 18 },
+        { type: "Trial", count: 128 },
+        { type: "HCP / KOL", count: 960 },
+        { type: "Document", count: knowledgeStats().documents },
+        { type: "Risk", count: 36 },
+        { type: "Adverse Event Signal", count: 22 },
+        { type: "Regulation", count: 74 },
+      ],
+      relationships: [
+        { from: "CardiaX", rel: "STUDIED_IN", to: "Phase III HFpEF" },
+        { from: "OncoPrime", rel: "REQUIRES", to: "PD-L1 companion diagnostic" },
+        { from: "ImmunoPath", rel: "HAS_SIGNAL", to: "Colitis (EB05 1.8)" },
+        { from: "Dr. Maya Chen", rel: "INFLUENCES", to: "Oncology KOL network" },
+        { from: "CardiaX sNDA", rel: "GOVERNED_BY", to: "FDA RWE guidance" },
+      ],
+      ontology: [
+        "Organization", "Person", "Product", "Customer", "Contract", "Document", "Regulation", "Policy",
+        "Asset", "Event", "Risk", "Metric", "Process", "Decision", "Evidence",
+        "Drug", "Disease", "Trial", "HCP", "Publication", "Submission", "AdverseEvent",
+      ],
+    });
+  }
+
+  if (path === "modules/data-rights" && method === "GET") {
+    return json({
+      zones: [
+        { zone: "GREEN", label: "Unrestricted / licensed", count: 8, policy: "Eligible for RAG; training only if license allows." },
+        { zone: "BLUE", label: "Retrieval permitted", count: 14, policy: "Store/search/cite. No model-weight training." },
+        { zone: "YELLOW", label: "Customer private", count: knowledgeStats().documents, policy: "Tenant-isolated. No cross-tenant training by default." },
+        { zone: "RED", label: "Prohibited / unclear", count: 0, policy: "Hard exclude. Unclear rights = do not train." },
+      ],
+      registry: [
+        { dataset_id: "clinicaltrials-gov-v2", publisher: "NIH/NLM", license: "Public government", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "openfda-faers", publisher: "FDA", license: "Public government", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "pubmed-eutils", publisher: "NCBI", license: "Public metadata + publisher fulltext varies", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "europe-pmc", publisher: "EMBL-EBI", license: "Mixed / OA subset", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "rxnorm", publisher: "NLM", license: "UMLS / RxNorm terms", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "dailymed-spl", publisher: "NLM", license: "Public SPL", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
+        { dataset_id: "eios-offline-corpus", publisher: "EIOS curated", license: "Internal synthetic/demo", commercial_use_allowed: true, model_training_allowed: true, rag_allowed: true, zone: "GREEN" },
+        { dataset_id: "tenant-private-docs", publisher: "Customer", license: "Customer contract", commercial_use_allowed: false, model_training_allowed: false, rag_allowed: true, zone: "YELLOW" },
+      ],
+    });
+  }
+
+  if (path === "modules/router" && method === "GET") {
+    const provider = hasOpenAI() ? "openai" : "demo";
+    return json({
+      active_provider: provider,
+      routes: [
+        { task: "chat_synthesis", tier: "quality", provider, reason: "Grounded answers with citations" },
+        { task: "classification", tier: "fast", provider: provider === "openai" ? "gpt-4o-mini" : "demo", reason: "Cheap intent/routing" },
+        { task: "embeddings", tier: "vector", provider: hasOpenAI() ? "text-embedding-3-small" : "local-hash", reason: "Hybrid RAG" },
+        { task: "safety_comms", tier: "gated", provider, reason: "Requires human approval before complete" },
+      ],
+      policy: [
+        "Choose lowest-cost model that meets quality gates.",
+        "Never invent NCT IDs, PMIDs, or FAERS counts.",
+        "Customer private context stays tenant-scoped.",
+        "Models are replaceable; orchestration stays proprietary.",
+      ],
+      note: hasOpenAI()
+        ? "OpenAI key detected for synthesis/embeddings with offline fallbacks."
+        : "Demo brain active. Set OPENAI_API_KEY for cloud synthesis.",
+    });
+  }
+
   if (path === "modules/marketplace" && method === "GET") {
     return json({
       items: [
