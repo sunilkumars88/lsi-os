@@ -1,14 +1,6 @@
-import OpenAI from "openai";
 import { createHash } from "crypto";
 
 const EMBED_MODEL = "text-embedding-3-small";
-const DIMS = 1536;
-
-function getOpenAI() {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  return new OpenAI({ apiKey: key });
-}
 
 /** Deterministic local embedding fallback (no network). */
 export function localEmbed(text: string, dims = 384): number[] {
@@ -27,17 +19,26 @@ export function localEmbed(text: string, dims = 384): number[] {
 
 export async function embedTexts(texts: string[]): Promise<number[][]> {
   if (!texts.length) return [];
-  const client = getOpenAI();
-  if (!client) return texts.map((t) => localEmbed(t));
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return texts.map((t) => localEmbed(t));
 
   try {
-    const resp = await client.embeddings.create({
-      model: EMBED_MODEL,
-      input: texts.map((t) => t.slice(0, 7000)),
+    const resp = await fetch("https://api.openai.com/v1/embeddings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: EMBED_MODEL,
+        input: texts.map((t) => t.slice(0, 7000)),
+      }),
     });
-    return resp.data
-      .sort((a, b) => a.index - b.index)
-      .map((d) => d.embedding);
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) return texts.map((t) => localEmbed(t));
+    return (data.data || [])
+      .sort((a: { index: number }, b: { index: number }) => a.index - b.index)
+      .map((d: { embedding: number[] }) => d.embedding);
   } catch {
     return texts.map((t) => localEmbed(t));
   }
@@ -73,4 +74,4 @@ export function keywordScore(query: string, content: string): number {
   return overlap / Math.sqrt(q.size * setC.size);
 }
 
-export { DIMS, EMBED_MODEL };
+export { EMBED_MODEL };

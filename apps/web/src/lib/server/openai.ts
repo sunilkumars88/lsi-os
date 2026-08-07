@@ -1,5 +1,3 @@
-import OpenAI from "openai";
-
 export type LLMResult = {
   content: string;
   model: string;
@@ -7,16 +5,11 @@ export type LLMResult = {
   tokens_in: number;
   tokens_out: number;
   cost_usd: number;
+  error?: string;
 };
 
-function client() {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  return new OpenAI({ apiKey: key });
-}
-
 export function hasOpenAI() {
-  return Boolean(process.env.OPENAI_API_KEY);
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 export async function completeChat(opts: {
@@ -24,21 +17,38 @@ export async function completeChat(opts: {
   messages: { role: "user" | "assistant"; content: string }[];
   temperature?: number;
 }): Promise<LLMResult> {
-  const c = client();
-  if (!c) {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) {
     return demoComplete(opts.messages.at(-1)?.content || "", opts.system);
   }
 
+  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
   try {
-    const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const resp = await c.chat.completions.create({
-      model,
-      temperature: opts.temperature ?? 0.2,
-      messages: [{ role: "system", content: opts.system }, ...opts.messages],
+    const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: opts.temperature ?? 0.2,
+        messages: [{ role: "system", content: opts.system }, ...opts.messages],
+      }),
     });
-    const content = resp.choices[0]?.message?.content || "";
-    const tin = resp.usage?.prompt_tokens || 0;
-    const tout = resp.usage?.completion_tokens || 0;
+
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+      const detail = data?.error?.message || `OpenAI HTTP ${resp.status}`;
+      const fallback = demoComplete(opts.messages.at(-1)?.content || "", opts.system);
+      fallback.error = detail;
+      fallback.content = `${fallback.content}\n\n_(OpenAI fallback: ${detail})_`;
+      return fallback;
+    }
+
+    const content = data?.choices?.[0]?.message?.content || "";
+    const tin = data?.usage?.prompt_tokens || 0;
+    const tout = data?.usage?.completion_tokens || 0;
     return {
       content,
       model,
@@ -48,9 +58,10 @@ export async function completeChat(opts: {
       cost_usd: (tin * 0.15 + tout * 0.6) / 1_000_000,
     };
   } catch (error) {
-    const msg = error instanceof Error ? error.message : "OpenAI error";
+    const msg = error instanceof Error ? error.message : "OpenAI network error";
     const fallback = demoComplete(opts.messages.at(-1)?.content || "", opts.system);
-    fallback.content = `${fallback.content}\n\n_(OpenAI unavailable: ${msg})_`;
+    fallback.error = msg;
+    fallback.content = `${fallback.content}\n\n_(OpenAI fallback: ${msg})_`;
     return fallback;
   }
 }
@@ -58,7 +69,7 @@ export async function completeChat(opts: {
 function demoComplete(query: string, system: string): LLMResult {
   const ctx = system.includes("CONTEXT:") ? system.split("CONTEXT:").pop()?.trim().slice(0, 2200) : "";
   const content = ctx
-    ? `**LSI-OS Copilot**\n\n${summarizeContext(query, ctx)}`
+    ? `**LSI-OS Copilot**\n\nQuery: ${query}\n\nBased on retrieved knowledge and live tool results:\n\n${ctx}\n\nSources are cited in the citations/tool panels. Escalate safety/regulatory communications for human approval.`
     : `**LSI-OS Copilot**\n\nAsk about trials, safety, literature, commercial, HEOR, or regulatory topics. Knowledge base and government APIs are connected.`;
   return {
     content,
@@ -68,10 +79,6 @@ function demoComplete(query: string, system: string): LLMResult {
     tokens_out: Math.ceil(content.length / 4),
     cost_usd: 0,
   };
-}
-
-function summarizeContext(query: string, ctx: string) {
-  return `Query: ${query}\n\nBased on retrieved knowledge and live tool results:\n\n${ctx}\n\nSources are cited in the citations/tool panels. Escalate safety/regulatory communications for human approval.`;
 }
 
 export const SYSTEM_PROMPTS = {

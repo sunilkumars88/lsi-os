@@ -281,6 +281,7 @@ async function handle(req: NextRequest, pathParts: string[]) {
       tool_traces,
       model: llm.model,
       provider: llm.provider,
+      error: llm.error,
     });
   }
 
