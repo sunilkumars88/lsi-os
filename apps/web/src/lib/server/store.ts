@@ -1,4 +1,6 @@
 import bcrypt from "bcryptjs";
+import { OFFLINE_CORPUS } from "./corpus";
+import { cosine, embedQuery, embedTexts, keywordScore } from "./embeddings";
 
 export type User = {
   id: string;
@@ -18,6 +20,13 @@ export type Organization = {
   plan: string;
 };
 
+export type Chunk = {
+  id: string;
+  content: string;
+  tokens: string[];
+  embedding?: number[];
+};
+
 export type Document = {
   id: string;
   org_id: string;
@@ -26,7 +35,7 @@ export type Document = {
   doc_type: string;
   source: string;
   created_at: string;
-  chunks: { id: string; content: string; tokens: string[] }[];
+  chunks: Chunk[];
 };
 
 export type ChatSession = {
@@ -113,6 +122,8 @@ type Store = {
   audit: AuditLog[];
   usage: UsageMeter[];
   ready: boolean;
+  embeddingReady: boolean;
+  embeddingPromise?: Promise<void>;
 };
 
 const globalForStore = globalThis as unknown as { __lsiStore?: Store };
@@ -129,13 +140,12 @@ function emptyStore(): Store {
     audit: [],
     usage: [],
     ready: false,
+    embeddingReady: false,
   };
 }
 
 export function getStore(): Store {
-  if (!globalForStore.__lsiStore) {
-    globalForStore.__lsiStore = emptyStore();
-  }
+  if (!globalForStore.__lsiStore) globalForStore.__lsiStore = emptyStore();
   return globalForStore.__lsiStore;
 }
 
@@ -151,62 +161,55 @@ function tokenize(text: string) {
   return text.toLowerCase().match(/[a-z0-9]+/g) || [];
 }
 
-function chunkText(text: string, size = 700) {
+export function chunkText(text: string, size = 700): string[] {
   const clean = text.replace(/\s+/g, " ").trim();
   if (clean.length <= size) return clean ? [clean] : [];
   const out: string[] = [];
-  for (let i = 0; i < clean.length; i += size - 100) {
-    out.push(clean.slice(i, i + size));
-  }
+  for (let i = 0; i < clean.length; i += size - 100) out.push(clean.slice(i, i + size));
   return out;
 }
 
-const SEED_DOCS = [
-  {
-    title: "CardiaX Phase III Synopsis",
-    doc_type: "protocol",
-    content:
-      "CardiaX is an oral SGLT2-pathway modulator in Phase III for HFpEF. Primary endpoint: cardiovascular death or HF hospitalization at 24 months. Enrollment target 4200 subjects across 180 sites. Current enrollment lag in APAC sites is 14% behind plan. Safety: genital mycotic infections and volume depletion are monitored.",
-  },
-  {
-    title: "OncoPrime Biomarker Testing Brief",
-    doc_type: "medical",
-    content:
-      "OncoPrime is a PD-1 combination therapy for NSCLC with PD-L1 >= 50%. Medical affairs priorities include KOL education on companion diagnostics and MSL talk tracks on immune-related AEs. Competitive pressure from Rival-B dual checkpoint regimen.",
-  },
-  {
-    title: "ImmunoPath Safety Signal Assessment",
-    doc_type: "safety",
-    content:
-      "ImmunoPath (IL-17 pathway) has an open signal for inflammatory bowel events. Disproportionality analysis shows EB05 1.8 for colitis. Actions: enhanced monitoring and label language review with PV and Regulatory. Human-in-the-loop approval required before external communication.",
-  },
-  {
-    title: "EU HTA Evidence Requirements — HEOR",
-    doc_type: "heor",
-    content:
-      "For EU HTA Joint Clinical Assessment readiness, OncoPrime requires relative effectiveness vs relevant comparators, subgroup consistency, and quality-of-life instruments (EQ-5D). NICE and G-BA remain critical markets.",
-  },
-  {
-    title: "FDA RWE Guidance Summary for Regulatory Affairs",
-    doc_type: "regulatory",
-    content:
-      "FDA guidance on real-world evidence supports use of RWD for label expansions when data quality, provenance, and confounding control are demonstrated. CMC readiness for CardiaX sNDA currently at 78%.",
-  },
-  {
-    title: "Competitive Landscape Snapshot",
-    doc_type: "commercial",
-    content:
-      "Rival-A expanded specialty pharmacy access in Q2. Rival-B launched a dual-checkpoint regimen with aggressive HCP digital detailing. Reinforce OncoPrime biomarker testing pathways and CardiaX cardiology KOL programs.",
-  },
-];
+export async function buildChunks(content: string): Promise<Chunk[]> {
+  const parts = chunkText(content);
+  const embeddings = await embedTexts(parts);
+  return parts.map((c, i) => ({
+    id: uid(),
+    content: c,
+    tokens: tokenize(c),
+    embedding: embeddings[i],
+  }));
+}
+
+async function embedAllDocuments(s: Store) {
+  const pending = s.documents.flatMap((d) => d.chunks.filter((c) => !c.embedding));
+  if (!pending.length) {
+    s.embeddingReady = true;
+    return;
+  }
+  // Batch in groups of 40
+  for (let i = 0; i < pending.length; i += 40) {
+    const batch = pending.slice(i, i + 40);
+    const vectors = await embedTexts(batch.map((c) => c.content));
+    batch.forEach((c, idx) => {
+      c.embedding = vectors[idx];
+    });
+  }
+  s.embeddingReady = true;
+}
 
 export function ensureSeeded() {
   const s = getStore();
-  if (s.ready && s.users.length) return s;
+  if (s.ready && s.users.length) {
+    if (!s.embeddingReady && !s.embeddingPromise) {
+      s.embeddingPromise = embedAllDocuments(s).catch(() => {
+        s.embeddingReady = true;
+      });
+    }
+    return s;
+  }
 
   const orgId = uid();
   s.orgs = [{ id: orgId, name: "LSI Demo Pharma", slug: "lsi-demo", plan: "enterprise" }];
-
   const adminHash = bcrypt.hashSync("demo1234", 10);
   s.users = [
     {
@@ -231,22 +234,21 @@ export function ensureSeeded() {
     },
   ];
 
-  s.documents = SEED_DOCS.map((d) => {
-    const id = uid();
-    const chunks = chunkText(d.content).map((c) => ({
-      id: uid(),
-      content: c,
-      tokens: tokenize(c),
-    }));
+  s.documents = OFFLINE_CORPUS.map((d) => {
+    const parts = chunkText(d.content);
     return {
-      id,
+      id: uid(),
       org_id: orgId,
       title: d.title,
       content: d.content,
       doc_type: d.doc_type,
-      source: "seed",
+      source: d.source,
       created_at: now(),
-      chunks,
+      chunks: parts.map((c) => ({
+        id: uid(),
+        content: c,
+        tokens: tokenize(c),
+      })),
     };
   });
 
@@ -255,7 +257,7 @@ export function ensureSeeded() {
       id: uid(),
       org_id: orgId,
       name: "Intelligence Brief Pipeline",
-      description: "Ingest knowledge, extract trials, analyze KPIs, approve, notify executives.",
+      description: "Ingest knowledge, extract trials/literature, analyze KPIs, approve, notify.",
       steps: [
         { id: "ingest", label: "Ingest", type: "ingest" },
         { id: "extract", label: "Extract Trials", type: "extract" },
@@ -273,26 +275,45 @@ export function ensureSeeded() {
   s.audit = [];
   s.usage = [];
   s.ready = true;
+  s.embeddingPromise = embedAllDocuments(s).catch(() => {
+    s.embeddingReady = true;
+  });
   return s;
 }
 
-export function hybridSearch(orgId: string, query: string, limit = 6) {
+export async function ensureReady() {
   const s = ensureSeeded();
-  const qTokens = new Set(tokenize(query));
-  const scored: { score: number; title: string; content: string; doc_type: string; document_id: string; chunk_id: string }[] = [];
+  if (s.embeddingPromise) await s.embeddingPromise;
+  return s;
+}
+
+export async function hybridSearch(orgId: string, query: string, limit = 8) {
+  const s = await ensureReady();
+  const qEmb = await embedQuery(query);
+  const scored: {
+    score: number;
+    title: string;
+    content: string;
+    doc_type: string;
+    document_id: string;
+    chunk_id: string;
+    source: string;
+  }[] = [];
 
   for (const doc of s.documents.filter((d) => d.org_id === orgId)) {
     for (const chunk of doc.chunks) {
-      const overlap = chunk.tokens.filter((t) => qTokens.has(t)).length;
-      const score = qTokens.size ? overlap / Math.sqrt(qTokens.size * Math.max(chunk.tokens.length, 1)) : 0;
-      if (score > 0.02 || doc.title.toLowerCase().includes(query.toLowerCase().slice(0, 12))) {
+      const vec = chunk.embedding ? cosine(qEmb, chunk.embedding) : 0;
+      const kw = keywordScore(query, `${doc.title} ${chunk.content}`);
+      const score = 0.72 * vec + 0.28 * kw;
+      if (score > 0.08) {
         scored.push({
-          score: Math.round((score + (doc.title.toLowerCase().includes("cardiax") && query.toLowerCase().includes("cardiax") ? 0.3 : 0)) * 1000) / 1000,
+          score: Math.round(score * 1000) / 1000,
           title: doc.title,
           content: chunk.content,
           doc_type: doc.doc_type,
           document_id: doc.id,
           chunk_id: chunk.id,
+          source: doc.source,
         });
       }
     }
@@ -304,18 +325,25 @@ export function hybridSearch(orgId: string, query: string, limit = 6) {
       .filter((d) => d.org_id === orgId)
       .slice(0, limit)
       .map((d) => ({
-        score: 0.15,
+        score: 0.12,
         title: d.title,
-        content: d.content.slice(0, 320),
+        content: d.content.slice(0, 360),
         doc_type: d.doc_type,
         document_id: d.id,
         chunk_id: d.chunks[0]?.id || d.id,
+        source: d.source,
       }));
   }
   return scored.slice(0, limit);
 }
 
-export function audit(orgId: string, userId: string | null, action: string, resource = "", details: Record<string, unknown> = {}) {
+export function audit(
+  orgId: string,
+  userId: string | null,
+  action: string,
+  resource = "",
+  details: Record<string, unknown> = {},
+) {
   const s = ensureSeeded();
   s.audit.unshift({
     id: uid(),
@@ -326,4 +354,17 @@ export function audit(orgId: string, userId: string | null, action: string, reso
     details,
     created_at: now(),
   });
+}
+
+export function knowledgeStats() {
+  const s = ensureSeeded();
+  const chunks = s.documents.reduce((n, d) => n + d.chunks.length, 0);
+  const embedded = s.documents.reduce((n, d) => n + d.chunks.filter((c) => c.embedding?.length).length, 0);
+  return {
+    documents: s.documents.length,
+    chunks,
+    embedded_chunks: embedded,
+    embedding_ready: s.embeddingReady,
+    openai_configured: Boolean(process.env.OPENAI_API_KEY),
+  };
 }

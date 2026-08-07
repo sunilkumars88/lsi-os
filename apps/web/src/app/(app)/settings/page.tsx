@@ -23,14 +23,14 @@ export default function SettingsPage() {
         <Panel>
           <h2 className="font-semibold">Integrations</h2>
           <p className="mt-3 text-sm text-[var(--ink-muted)]">
-            API base: <code>{API_URL}</code>
+            API base: <code>{API_URL || "(same-origin /api)"}</code>
           </p>
           <p className="mt-3 text-sm text-[var(--ink-muted)]">
-            Set <code>OPENAI_API_KEY</code> or <code>ANTHROPIC_API_KEY</code> on the API process to enable cloud LLMs.
-            Without keys, LSI-OS uses the demo brain with full retrieval and tools.
+            OpenAI powers chat, agents, and <code>text-embedding-3-small</code> embeddings when
+            <code> OPENAI_API_KEY</code> is set on Vercel. Offline corpus + government APIs always work.
           </p>
           <p className="mt-3 text-sm text-[var(--ink-muted)]">
-            Notifications: in-app audit events are written on login, chat, agent, and workflow actions.
+            Live sources: ClinicalTrials.gov, OpenFDA (FAERS/Labels/Enforcement), PubMed, Europe PMC, RxNorm, DailyMed.
           </p>
         </Panel>
       </div>

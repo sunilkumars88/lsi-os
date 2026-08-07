@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
-import { ensureSeeded } from "@/lib/server/store";
+import { hasOpenAI } from "@/lib/server/openai";
+import { ensureReady, knowledgeStats } from "@/lib/server/store";
+import { DATA_SOURCES } from "@/lib/server/tools";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const s = ensureSeeded();
+  await ensureReady();
+  const stats = knowledgeStats();
   return NextResponse.json({
     status: "ok",
     service: "LSI-OS Web API",
-    users: s.users.length,
-    documents: s.documents.length,
+    openai: hasOpenAI(),
+    knowledge: stats,
+    sources: DATA_SOURCES.length,
     demo: { email: "admin@lsi.os", password: "demo1234" },
   });
 }
