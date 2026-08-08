@@ -10,6 +10,8 @@ export default function RouterPage() {
     routes: { task: string; tier: string; provider: string; reason: string }[];
     policy: string[];
     note: string;
+    action_required?: string | null;
+    openai?: { configured: boolean; ok: boolean; error?: string };
   } | null>(null);
 
   useEffect(() => {
@@ -26,8 +28,21 @@ export default function RouterPage() {
       />
       <Panel className="mb-4">
         <div className="text-sm text-[var(--ink-muted)]">Active provider</div>
-        <div className="mt-1 font-[family-name:var(--font-display)] text-3xl">{data.active_provider}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-3">
+          <div className="font-[family-name:var(--font-display)] text-3xl">{data.active_provider}</div>
+          <Badge tone={data.openai?.ok ? "good" : "warn"}>
+            {data.openai?.ok ? "OpenAI key valid" : data.openai?.configured ? "Key invalid" : "Key missing"}
+          </Badge>
+        </div>
         <p className="mt-2 text-sm text-[var(--ink-muted)]">{data.note}</p>
+        {data.action_required ? (
+          <p className="mt-3 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-900">
+            Action required: {data.action_required}
+          </p>
+        ) : null}
+        {data.openai?.error ? (
+          <p className="mt-2 text-sm text-[var(--danger)]">{data.openai.error}</p>
+        ) : null}
       </Panel>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
@@ -39,7 +54,9 @@ export default function RouterPage() {
                   <span className="font-medium">{r.task}</span>
                   <Badge>{r.provider}</Badge>
                 </div>
-                <div className="mt-1 text-[var(--ink-muted)]">{r.tier} · {r.reason}</div>
+                <div className="mt-1 text-[var(--ink-muted)]">
+                  {r.tier} · {r.reason}
+                </div>
               </div>
             ))}
           </div>

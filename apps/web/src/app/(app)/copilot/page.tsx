@@ -11,6 +11,7 @@ type ChatOut = {
   tool_traces: unknown[];
   model: string;
   provider: string;
+  error?: string;
 };
 
 type Msg = { role: "user" | "assistant"; content: string; meta?: ChatOut };
@@ -66,10 +67,18 @@ export default function CopilotPage() {
                 </div>
                 {m.meta ? (
                   <div className="mt-2 flex flex-wrap gap-2">
-                    <Badge>{m.meta.provider}/{m.meta.model}</Badge>
+                    <Badge tone={m.meta.provider === "openai" ? "good" : "warn"}>
+                      {m.meta.provider}/{m.meta.model}
+                    </Badge>
                     <Badge tone="good">{m.meta.citations?.length || 0} citations</Badge>
                     <Badge>{m.meta.tool_traces?.length || 0} tools</Badge>
+                    {m.meta.error ? <Badge tone="bad">OpenAI error</Badge> : null}
                   </div>
+                ) : null}
+                {m.meta?.error ? (
+                  <p className="mt-2 text-xs text-[var(--danger)]">
+                    OpenAI rejected the key: {m.meta.error}. Replace OPENAI_API_KEY in Vercel with a new valid key.
+                  </p>
                 ) : null}
               </div>
             ))}

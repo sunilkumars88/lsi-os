@@ -4,6 +4,18 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, Brain, Building2, Lock, Network, Workflow } from "lucide-react";
 import { Button } from "@/components/ui";
+import { INDUSTRY_PACKS, packLoginHref } from "@/lib/packs";
+
+const LANDING_PACK_IDS = [
+  "life-sciences",
+  "banking",
+  "insurance",
+  "manufacturing",
+  "retail",
+  "government",
+  "healthcare",
+  "legal",
+] as const;
 
 export default function LandingPage() {
   return (
@@ -22,7 +34,7 @@ export default function LandingPage() {
           <Link href="/login" className="hidden text-sm text-teal-50 sm:inline">
             Sign in
           </Link>
-          <Link href="/register">
+          <Link href="/login">
             <Button className="!bg-white !text-slate-900">Open workspace</Button>
           </Link>
         </div>
@@ -73,7 +85,7 @@ export default function LandingPage() {
             transition={{ delay: 0.24 }}
             className="mt-8 flex flex-wrap gap-3"
           >
-            <Link href="/login">
+            <Link href="/login?next=/dashboard&pack=life-sciences">
               <Button className="!bg-teal-100 !text-teal-950">
                 Enter Command Center <ArrowRight size={16} />
               </Button>
@@ -84,7 +96,7 @@ export default function LandingPage() {
               </Button>
             </Link>
           </motion.div>
-          <p className="mt-6 text-xs text-teal-100/70">Demo: admin@lsi.os / demo1234 · Life Sciences pack active</p>
+          <p className="mt-6 text-xs text-teal-100/70">Demo: admin@lsi.os / demo1234 · Click a pack below to open it</p>
         </div>
       </section>
 
@@ -97,16 +109,19 @@ export default function LandingPage() {
         </p>
         <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {[
-            { icon: Brain, title: "Memory", body: "Enterprise memory, RAG, knowledge graph, citations." },
-            { icon: Network, title: "Eyes", body: "CRM, ERP, trials, safety, documents, connectors." },
-            { icon: Workflow, title: "Hands", body: "Agents, workflows, approvals, task assignment." },
-            { icon: Lock, title: "Governance", body: "RBAC, audit, data rights, tenant isolation." },
+            { icon: Brain, title: "Memory", body: "Enterprise memory, RAG, knowledge graph, citations.", href: "/login?next=/knowledge" },
+            { icon: Network, title: "Eyes", body: "CRM, ERP, trials, safety, documents, connectors.", href: "/login?next=/integrations" },
+            { icon: Workflow, title: "Hands", body: "Agents, workflows, approvals, task assignment.", href: "/login?next=/agents" },
+            { icon: Lock, title: "Governance", body: "RBAC, audit, data rights, tenant isolation.", href: "/login?next=/admin" },
           ].map((item) => (
-            <div key={item.title} className="border-t border-[var(--line)] pt-5">
+            <Link key={item.title} href={item.href} className="border-t border-[var(--line)] pt-5 transition hover:border-[var(--accent)]">
               <item.icon className="text-[var(--accent)]" size={22} />
               <h3 className="mt-4 text-lg font-semibold">{item.title}</h3>
               <p className="mt-2 text-sm text-[var(--ink-muted)]">{item.body}</p>
-            </div>
+              <span className="mt-3 inline-flex items-center gap-1 text-sm text-[var(--accent)]">
+                Open <ArrowRight size={14} />
+              </span>
+            </Link>
           ))}
         </div>
       </section>
@@ -117,21 +132,39 @@ export default function LandingPage() {
             <div>
               <h2 className="font-[family-name:var(--font-display)] text-3xl tracking-tight">One core. Many industries.</h2>
               <p className="mt-3 max-w-xl text-[var(--ink-muted)]">
-                Shared Enterprise Intelligence OS with plug-in industry packs—Life Sciences first.
+                Click any pack to sign in and open its live console. Life Sciences is the deepest module set.
               </p>
             </div>
             <Building2 className="hidden text-[var(--accent)] sm:block" size={28} />
           </div>
           <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {["Life Sciences", "Banking", "Insurance", "Manufacturing", "Retail", "Government", "Healthcare", "Legal"].map(
-              (name, i) => (
-                <div key={name} className="border border-[var(--line)] bg-[var(--bg)] px-4 py-4">
-                  <div className="text-sm font-semibold">{name}</div>
-                  <div className="mt-1 text-xs text-[var(--ink-muted)]">{i === 0 ? "Active pack" : "Pack ready / roadmap"}</div>
-                </div>
-              ),
-            )}
+            {LANDING_PACK_IDS.map((id) => {
+              const pack = INDUSTRY_PACKS.find((p) => p.id === id);
+              if (!pack) return null;
+              const label =
+                pack.status === "active"
+                  ? "Active — open workspace"
+                  : pack.status === "available"
+                    ? "Open live console"
+                    : "Open pack console";
+              return (
+                <Link
+                  key={pack.id}
+                  href={packLoginHref(pack.id)}
+                  className="border border-[var(--line)] bg-[var(--bg)] px-4 py-4 transition hover:border-[var(--accent)] hover:bg-[var(--surface-2)]"
+                >
+                  <div className="text-sm font-semibold">{pack.short}</div>
+                  <div className="mt-1 text-xs text-[var(--ink-muted)]">{label}</div>
+                  <div className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[var(--accent)]">
+                    Launch <ArrowRight size={12} />
+                  </div>
+                </Link>
+              );
+            })}
           </div>
+          <p className="mt-6 text-sm text-[var(--ink-muted)]">
+            After login you land in that pack. Use the sidebar Industry pack switcher anytime.
+          </p>
         </div>
       </section>
     </div>

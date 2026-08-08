@@ -48,7 +48,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     id: "manufacturing",
     name: "Manufacturing & Supply Chain",
     short: "Manufacturing",
-    status: "roadmap",
+    status: "available",
     description: "Plant ops, quality, supplier risk, and predictive maintenance agents.",
     modules: [{ href: "/packs/manufacturing", label: "Manufacturing console" }],
     kpis: ["OEE", "Defect rate", "Lead time"],
@@ -57,7 +57,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     id: "retail",
     name: "Retail & eCommerce",
     short: "Retail",
-    status: "roadmap",
+    status: "available",
     description: "Demand sensing, merchandising, CX orchestration, and inventory intelligence.",
     modules: [{ href: "/packs/retail", label: "Retail console" }],
     kpis: ["Sell-through", "Stockouts", "NPS"],
@@ -66,7 +66,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     id: "government",
     name: "Government & Public Sector",
     short: "Government",
-    status: "roadmap",
+    status: "available",
     description: "Casework, citizen services, policy intelligence, and secure multi-agency collaboration.",
     modules: [{ href: "/packs/government", label: "Government console" }],
     kpis: ["Case SLA", "Service satisfaction"],
@@ -102,7 +102,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     id: "legal",
     name: "Legal Intelligence",
     short: "Legal",
-    status: "roadmap",
+    status: "available",
     description: "Contract intelligence, matter workflows, and citation-grounded research.",
     modules: [{ href: "/packs/legal", label: "Legal console" }],
     kpis: ["Cycle time", "Risk flags"],
@@ -154,3 +154,14 @@ export const CORE_OS_NAV = [
 ] as const;
 
 export const DEFAULT_PACK_ID = "life-sciences";
+
+/** Where a pack opens after login / from marketing CTAs. */
+export function packWorkspaceHref(packId: string) {
+  if (packId === "life-sciences") return "/dashboard";
+  return `/packs/${packId}`;
+}
+
+export function packLoginHref(packId: string) {
+  const next = packWorkspaceHref(packId);
+  return `/login?pack=${encodeURIComponent(packId)}&next=${encodeURIComponent(next)}`;
+}

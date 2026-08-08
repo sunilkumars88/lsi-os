@@ -12,6 +12,37 @@ export function hasOpenAI() {
   return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
+/** Live probe so UI does not claim OpenAI works when the key is rejected. */
+export async function probeOpenAI(): Promise<{
+  configured: boolean;
+  ok: boolean;
+  error?: string;
+}> {
+  const apiKey = process.env.OPENAI_API_KEY?.trim();
+  if (!apiKey) return { configured: false, ok: false, error: "OPENAI_API_KEY not set on Vercel" };
+  try {
+    const resp = await fetch("https://api.openai.com/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      cache: "no-store",
+    });
+    if (!resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      return {
+        configured: true,
+        ok: false,
+        error: data?.error?.message || `OpenAI HTTP ${resp.status}`,
+      };
+    }
+    return { configured: true, ok: true };
+  } catch (error) {
+    return {
+      configured: true,
+      ok: false,
+      error: error instanceof Error ? error.message : "OpenAI network error",
+    };
+  }
+}
+
 export async function completeChat(opts: {
   system: string;
   messages: { role: "user" | "assistant"; content: string }[];

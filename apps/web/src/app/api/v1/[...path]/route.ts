@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { hashPassword, signToken, userFromAuthHeader, verifyPassword } from "@/lib/server/auth";
-import { SYSTEM_PROMPTS, completeChat, hasOpenAI } from "@/lib/server/openai";
+import { SYSTEM_PROMPTS, completeChat, hasOpenAI, probeOpenAI } from "@/lib/server/openai";
 import {
   AGENT_TYPES,
   DATA_SOURCES,
@@ -832,13 +832,15 @@ async function handle(req: NextRequest, pathParts: string[]) {
   }
 
   if (path === "modules/router" && method === "GET") {
-    const provider = hasOpenAI() ? "openai" : "demo";
+    const probe = await probeOpenAI();
+    const provider = probe.ok ? "openai" : "demo";
     return json({
       active_provider: provider,
+      openai: probe,
       routes: [
         { task: "chat_synthesis", tier: "quality", provider, reason: "Grounded answers with citations" },
-        { task: "classification", tier: "fast", provider: provider === "openai" ? "gpt-4o-mini" : "demo", reason: "Cheap intent/routing" },
-        { task: "embeddings", tier: "vector", provider: hasOpenAI() ? "text-embedding-3-small" : "local-hash", reason: "Hybrid RAG" },
+        { task: "classification", tier: "fast", provider: probe.ok ? "gpt-4o-mini" : "demo", reason: "Cheap intent/routing" },
+        { task: "embeddings", tier: "vector", provider: probe.ok ? "text-embedding-3-small" : "local-hash", reason: "Hybrid RAG" },
         { task: "safety_comms", tier: "gated", provider, reason: "Requires human approval before complete" },
       ],
       policy: [
@@ -847,9 +849,14 @@ async function handle(req: NextRequest, pathParts: string[]) {
         "Customer private context stays tenant-scoped.",
         "Models are replaceable; orchestration stays proprietary.",
       ],
-      note: hasOpenAI()
-        ? "OpenAI key detected for synthesis/embeddings with offline fallbacks."
-        : "Demo brain active. Set OPENAI_API_KEY for cloud synthesis.",
+      note: probe.ok
+        ? "OpenAI key valid — synthesis and embeddings use cloud models with offline fallbacks."
+        : probe.configured
+          ? `OpenAI key rejected: ${probe.error}. Platform still runs with demo brain + live government APIs. Replace OPENAI_API_KEY in Vercel.`
+          : "Demo brain active. Set OPENAI_API_KEY in Vercel for cloud synthesis.",
+      action_required: probe.ok
+        ? null
+        : "Create a new OpenAI API key and set it as OPENAI_API_KEY (Production) in Vercel, then redeploy.",
     });
   }
 
