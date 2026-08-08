@@ -32,11 +32,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Banking",
     status: "available",
     description: "Fraud, credit risk, KYC/AML, customer intelligence, and regulated workflow automation.",
-    modules: [
-      { href: "/packs/banking", label: "Risk & Fraud" },
-      { href: "/packs/banking", label: "KYC / AML" },
-      { href: "/packs/banking", label: "Credit Ops" },
-    ],
+    modules: [{ href: "/packs/banking", label: "Banking console" }],
     kpis: ["Fraud loss rate", "KYC SLA", "NPL ratio"],
   },
   {
@@ -45,7 +41,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Insurance",
     status: "available",
     description: "Claims triage, underwriting support, policy intelligence, and broker workflows.",
-    modules: [{ href: "/packs/insurance", label: "Claims" }, { href: "/packs/insurance", label: "Underwriting" }],
+    modules: [{ href: "/packs/insurance", label: "Insurance console" }],
     kpis: ["Claims cycle time", "Leakage", "Combined ratio"],
   },
   {
@@ -54,7 +50,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Manufacturing",
     status: "roadmap",
     description: "Plant ops, quality, supplier risk, and predictive maintenance agents.",
-    modules: [{ href: "/packs/manufacturing", label: "Ops" }],
+    modules: [{ href: "/packs/manufacturing", label: "Manufacturing console" }],
     kpis: ["OEE", "Defect rate", "Lead time"],
   },
   {
@@ -63,7 +59,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Retail",
     status: "roadmap",
     description: "Demand sensing, merchandising, CX orchestration, and inventory intelligence.",
-    modules: [{ href: "/packs/retail", label: "Merch" }],
+    modules: [{ href: "/packs/retail", label: "Retail console" }],
     kpis: ["Sell-through", "Stockouts", "NPS"],
   },
   {
@@ -72,7 +68,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Government",
     status: "roadmap",
     description: "Casework, citizen services, policy intelligence, and secure multi-agency collaboration.",
-    modules: [{ href: "/packs/government", label: "Casework" }],
+    modules: [{ href: "/packs/government", label: "Government console" }],
     kpis: ["Case SLA", "Service satisfaction"],
   },
   {
@@ -81,7 +77,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Healthcare",
     status: "available",
     description: "Clinical operations, care pathways, revenue cycle, and provider knowledge workflows.",
-    modules: [{ href: "/packs/healthcare", label: "Care Ops" }],
+    modules: [{ href: "/packs/healthcare", label: "Healthcare console" }],
     kpis: ["Length of stay", "Denial rate"],
   },
   {
@@ -90,7 +86,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Energy",
     status: "roadmap",
     description: "Asset reliability, grid intelligence, and field operations automation.",
-    modules: [{ href: "/packs/energy", label: "Assets" }],
+    modules: [{ href: "/packs/energy", label: "Energy console" }],
     kpis: ["Uptime", "SAIDI"],
   },
   {
@@ -99,7 +95,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Telecom",
     status: "roadmap",
     description: "Network ops, churn prevention, and service assurance agents.",
-    modules: [{ href: "/packs/telecom", label: "Network" }],
+    modules: [{ href: "/packs/telecom", label: "Telecom console" }],
     kpis: ["Churn", "MTTR"],
   },
   {
@@ -108,7 +104,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Legal",
     status: "roadmap",
     description: "Contract intelligence, matter workflows, and citation-grounded research.",
-    modules: [{ href: "/packs/legal", label: "Contracts" }],
+    modules: [{ href: "/packs/legal", label: "Legal console" }],
     kpis: ["Cycle time", "Risk flags"],
   },
   {
@@ -117,7 +113,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "HR",
     status: "roadmap",
     description: "Talent workflows, policy Q&A with governance, and workforce analytics.",
-    modules: [{ href: "/packs/hr", label: "Talent" }],
+    modules: [{ href: "/packs/hr", label: "HR console" }],
     kpis: ["Time-to-hire", "Attrition"],
   },
   {
@@ -126,7 +122,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Logistics",
     status: "roadmap",
     description: "Route optimization intelligence, exception handling, and partner orchestration.",
-    modules: [{ href: "/packs/logistics", label: "Control tower" }],
+    modules: [{ href: "/packs/logistics", label: "Logistics console" }],
     kpis: ["OTIF", "Cost/ton-mile"],
   },
   {
@@ -135,7 +131,7 @@ export const INDUSTRY_PACKS: IndustryPack[] = [
     short: "Education",
     status: "roadmap",
     description: "Learner operations, institutional knowledge, and advising workflows.",
-    modules: [{ href: "/packs/education", label: "Learner ops" }],
+    modules: [{ href: "/packs/education", label: "Education console" }],
     kpis: ["Retention", "Completion"],
   },
 ];

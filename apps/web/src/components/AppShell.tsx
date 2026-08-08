@@ -32,7 +32,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { usePack } from "@/lib/pack-context";
 import { CORE_OS_NAV } from "@/lib/packs";
-import { cx } from "./ui";
+import { Loading, cx } from "./ui";
 
 const iconMap: Record<string, LucideIcon> = {
   "/dashboard": LayoutDashboard,
@@ -65,18 +65,30 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
 
   const groups = useMemo(() => {
-    const map = new Map<string, typeof CORE_OS_NAV>();
+    const map = new Map<string, (typeof CORE_OS_NAV)[number][]>();
     for (const item of CORE_OS_NAV) {
-      const list = map.get(item.group) || ([] as unknown as typeof CORE_OS_NAV);
-      (list as unknown as (typeof CORE_OS_NAV)[number][]).push(item);
+      const list = map.get(item.group) || [];
+      list.push(item);
       map.set(item.group, list);
     }
     return [...map.entries()];
   }, []);
 
-  if (!loading && !user) {
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
+        <Loading />
+      </div>
+    );
+  }
+
+  if (!user) {
     router.replace("/login");
-    return null;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--bg)]">
+        <Loading />
+      </div>
+    );
   }
 
   return (
@@ -102,17 +114,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <select
               className="w-full rounded-md border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-sm"
               value={pack.id}
-              onChange={(e) => setPackId(e.target.value)}
+              onChange={(e) => {
+                const id = e.target.value;
+                setPackId(id);
+                if (id === "life-sciences") router.push("/dashboard");
+                else router.push(`/packs/${id}`);
+              }}
             >
               {packs.map((p) => (
                 <option key={p.id} value={p.id}>
-                  {p.short} {p.status === "active" ? "· live" : p.status === "available" ? "· available" : "· roadmap"}
+                  {p.short} · {p.status}
                 </option>
               ))}
             </select>
           </div>
 
-          <nav className="space-y-4 px-3 pb-8">
+          <nav className="max-h-[calc(100vh-8rem)] space-y-4 overflow-y-auto px-3 pb-8">
             {groups.map(([group, items]) => (
               <div key={group}>
                 <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
@@ -143,7 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             ))}
 
-            {pack.status === "active" ? (
+            {pack.id === "life-sciences" ? (
               <div>
                 <div className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wide text-[var(--ink-muted)]">
                   Pack · {pack.short}
@@ -172,9 +189,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             ) : (
-              <div className="mx-3 rounded-md border border-dashed border-[var(--line)] p-3 text-xs text-[var(--ink-muted)]">
-                {pack.short} pack is {pack.status}. Core OS stays available; domain modules activate when the pack is
-                enabled.
+              <div className="mx-3 rounded-md border border-[var(--line)] bg-[var(--bg)] p-3 text-xs text-[var(--ink-muted)]">
+                <p className="font-medium text-[var(--ink)]">{pack.short} workspace</p>
+                <p className="mt-1">Open the pack console for live KPIs, agents, and workflows.</p>
+                <Link href={`/packs/${pack.id}`} className="mt-2 inline-block text-[var(--accent)]" onClick={() => setOpen(false)}>
+                  Open {pack.short} pack →
+                </Link>
               </div>
             )}
           </nav>
@@ -186,12 +206,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Menu size={20} />
             </button>
             <div className="text-sm text-[var(--ink-muted)]">
-              {user?.org_name || "Organization"} · {pack.short} · {user?.role}
+              {user.org_name || "Organization"} · {pack.short} · {user.role}
             </div>
             <div className="flex items-center gap-3">
               <div className="text-right text-sm">
-                <div className="font-medium">{user?.full_name}</div>
-                <div className="text-[var(--ink-muted)]">{user?.email}</div>
+                <div className="font-medium">{user.full_name}</div>
+                <div className="text-[var(--ink-muted)]">{user.email}</div>
               </div>
               <button
                 onClick={() => {

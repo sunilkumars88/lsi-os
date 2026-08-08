@@ -12,12 +12,23 @@ export default function MedicalPage() {
     msls_focus: string[];
   } | null>(null);
 
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   async function load(query = q) {
-    setData(await api<NonNullable<typeof data>>(`/api/v1/modules/medical?q=${encodeURIComponent(query)}`));
+    setBusy(true);
+    setError("");
+    try {
+      setData(await api<NonNullable<typeof data>>(`/api/v1/modules/medical?q=${encodeURIComponent(query)}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Load failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
-    load().catch(console.error);
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -26,14 +37,23 @@ export default function MedicalPage() {
     await load(q);
   }
 
-  if (!data) return <Loading />;
+  if (!data && !error) return <Loading />;
+  if (!data) {
+    return (
+      <div>
+        <PageHeader title="Medical Affairs" subtitle="KOL intelligence and live PubMed scientific signals." />
+        <Panel><p className="text-sm text-[var(--danger)]">{error}</p></Panel>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader title="Medical Affairs" subtitle="KOL intelligence and live PubMed scientific signals." />
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       <form onSubmit={onSearch} className="mb-4 flex gap-2">
         <Input value={q} onChange={(e) => setQ(e.target.value)} />
-        <Button type="submit">Search literature</Button>
+        <Button type="submit" disabled={busy}>{busy ? "Searching…" : "Search literature"}</Button>
       </form>
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>

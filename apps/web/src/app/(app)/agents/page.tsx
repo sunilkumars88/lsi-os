@@ -25,6 +25,8 @@ export default function AgentsPage() {
   const [query, setQuery] = useState("pembrolizumab NSCLC Phase 3");
   const [active, setActive] = useState<Job | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bootstrapping, setBootstrapping] = useState(true);
+  const [error, setError] = useState("");
 
   async function refresh() {
     const [t, j] = await Promise.all([
@@ -36,12 +38,15 @@ export default function AgentsPage() {
   }
 
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh()
+      .catch((e) => setError(e.message))
+      .finally(() => setBootstrapping(false));
   }, []);
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
       const job = await api<Job>("/api/v1/agents/jobs", {
         method: "POST",
@@ -49,20 +54,30 @@ export default function AgentsPage() {
       });
       setActive(job);
       await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Agent run failed");
     } finally {
       setLoading(false);
     }
   }
 
   async function approve(id: string) {
-    const job = await api<Job>(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
-    setActive(job);
-    await refresh();
+    setError("");
+    try {
+      const job = await api<Job>(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
+      setActive(job);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Approve failed");
+    }
   }
+
+  if (bootstrapping) return <Loading />;
 
   return (
     <div>
       <PageHeader title="Agent Studio" subtitle="Plan → tool calls → synthesize. Safety/Regulatory agents require approval." />
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel>
           <form onSubmit={onSubmit} className="space-y-4">
@@ -134,13 +149,17 @@ export default function AgentsPage() {
             <button
               key={j.id}
               className="flex w-full items-center justify-between rounded-md border border-[var(--line)] px-3 py-2 text-left text-sm hover:bg-[var(--surface-2)]"
-              onClick={() => api<Job>(`/api/v1/agents/jobs/${j.id}`).then(setActive)}
+              onClick={() =>
+                api<Job>(`/api/v1/agents/jobs/${j.id}`)
+                  .then(setActive)
+                  .catch((e) => setError(e.message))
+              }
             >
               <span>{j.name}</span>
               <Badge>{j.status}</Badge>
             </button>
           ))}
-          {!jobs.length ? <Loading /> : null}
+          {!jobs.length ? <p className="text-sm text-[var(--ink-muted)]">No jobs yet — run an agent above.</p> : null}
         </div>
       </Panel>
     </div>

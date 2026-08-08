@@ -1,8 +1,21 @@
 /**
  * Same-origin by default so Vercel serves UI + API together.
- * Set NEXT_PUBLIC_API_URL=http://localhost:8000 to use the FastAPI backend locally.
+ * Only set NEXT_PUBLIC_API_URL for a separate FastAPI host.
  */
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+function resolveApiBase() {
+  const raw = process.env.NEXT_PUBLIC_API_URL;
+  if (!raw || raw === "undefined" || raw === "null") return "";
+  // Never call localhost from a deployed browser session
+  if (typeof window !== "undefined") {
+    const host = window.location.hostname;
+    if (host !== "localhost" && host !== "127.0.0.1" && raw.includes("localhost")) {
+      return "";
+    }
+  }
+  return raw.replace(/\/$/, "");
+}
+
+const API_URL = resolveApiBase();
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;
@@ -31,7 +44,7 @@ export async function api<T = unknown>(
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body.detail || JSON.stringify(body);
+      detail = body.detail || body.error || JSON.stringify(body);
     } catch {
       /* ignore */
     }

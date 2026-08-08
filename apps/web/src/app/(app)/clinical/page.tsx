@@ -12,13 +12,23 @@ export default function ClinicalPage() {
     error?: string;
   } | null>(null);
 
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   async function load(query = q) {
-    setData(await api<NonNullable<typeof data>>(`/api/v1/modules/clinical?q=${encodeURIComponent(query)}`));
+    setBusy(true);
+    setError("");
+    try {
+      setData(await api<NonNullable<typeof data>>(`/api/v1/modules/clinical?q=${encodeURIComponent(query)}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Load failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
-    load().catch(console.error);
-    // initial fetch only
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -27,14 +37,23 @@ export default function ClinicalPage() {
     await load(q);
   }
 
-  if (!data) return <Loading />;
+  if (!data && !error) return <Loading />;
+  if (!data) {
+    return (
+      <div>
+        <PageHeader title="Clinical Intelligence" subtitle="Live ClinicalTrials.gov explorer plus operations KPIs." />
+        <Panel><p className="text-sm text-[var(--danger)]">{error}</p></Panel>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader title="Clinical Intelligence" subtitle="Live ClinicalTrials.gov explorer plus operations KPIs." />
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       <form onSubmit={onSearch} className="mb-4 flex gap-2">
         <Input value={q} onChange={(e) => setQ(e.target.value)} />
-        <Button type="submit">Search trials</Button>
+        <Button type="submit" disabled={busy}>{busy ? "Searching…" : "Search trials"}</Button>
       </form>
       <div className="mb-4 grid gap-4 sm:grid-cols-4">
         <Panel><div className="text-sm text-[var(--ink-muted)]">Sites</div><div className="text-2xl font-[family-name:var(--font-display)]">{data.ops.sites_activated}</div></Panel>

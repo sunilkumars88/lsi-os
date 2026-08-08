@@ -10,7 +10,7 @@ export async function GET() {
   const stats = knowledgeStats();
   return NextResponse.json({
     status: "ok",
-    service: "LSI-OS Web API",
+    service: "EIOS API",
     openai: hasOpenAI(),
     knowledge: stats,
     sources: DATA_SOURCES.length,

@@ -18,12 +18,23 @@ export default function SafetyPage() {
     note?: string;
   } | null>(null);
 
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
   async function load(d = drug) {
-    setData(await api<NonNullable<typeof data>>(`/api/v1/modules/safety?drug=${encodeURIComponent(d)}`));
+    setBusy(true);
+    setError("");
+    try {
+      setData(await api<NonNullable<typeof data>>(`/api/v1/modules/safety?drug=${encodeURIComponent(d)}`));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Load failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   useEffect(() => {
-    load().catch(console.error);
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -32,15 +43,24 @@ export default function SafetyPage() {
     await load(drug);
   }
 
-  if (!data) return <Loading />;
+  if (!data && !error) return <Loading />;
+  if (!data) {
+    return (
+      <div>
+        <PageHeader title="Pharmacovigilance" subtitle="OpenFDA adverse events plus internal signal scores." />
+        <Panel><p className="text-sm text-[var(--danger)]">{error}</p></Panel>
+      </div>
+    );
+  }
 
   return (
     <div>
       <PageHeader title="Pharmacovigilance" subtitle="OpenFDA adverse events plus internal signal scores." />
       <form onSubmit={onSearch} className="mb-4 flex gap-2">
         <Input value={drug} onChange={(e) => setDrug(e.target.value)} placeholder="Drug name" />
-        <Button type="submit">Query FAERS</Button>
+        <Button type="submit" disabled={busy}>{busy ? "Querying…" : "Query FAERS"}</Button>
       </form>
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       {data.error ? <p className="mb-3 text-sm text-[var(--danger)]">{data.error}</p> : null}
       {data.note ? <p className="mb-3 text-sm text-[var(--ink-muted)]">{data.note}</p> : null}
       <div className="mb-4 grid gap-4 md:grid-cols-3">

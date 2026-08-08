@@ -74,7 +74,11 @@ export default function CopilotPage() {
               </div>
             ))}
             {loading ? <Loading /> : null}
-            {error ? <p className="text-sm text-[var(--danger)]">{error}</p> : null}
+            {error ? (
+              <p className="rounded-md bg-rose-500/10 px-3 py-2 text-sm text-[var(--danger)]">
+                {error}. If this persists, sign out and sign in again with admin@lsi.os / demo1234.
+              </p>
+            ) : null}
           </div>
           <form onSubmit={onSubmit} className="mt-4 flex flex-col gap-3 border-t border-[var(--line)] pt-4">
             <Textarea rows={3} value={input} onChange={(e) => setInput(e.target.value)} placeholder="Ask LSI-OS…" />

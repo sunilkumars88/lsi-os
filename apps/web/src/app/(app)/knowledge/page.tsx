@@ -31,6 +31,8 @@ export default function KnowledgePage() {
   const [hits, setHits] = useState<Hit[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [selected, setSelected] = useState<{ title: string; content: string; chunk_count?: number; embedded?: number } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
   async function refresh() {
     const [d, s] = await Promise.all([
@@ -42,28 +44,44 @@ export default function KnowledgePage() {
   }
 
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => setError(e.message));
   }, []);
 
   async function ingest(e: FormEvent) {
     e.preventDefault();
-    await api("/api/v1/knowledge/documents", {
-      method: "POST",
-      body: JSON.stringify({ title, content, doc_type: "general", source: "upload" }),
-    });
-    setTitle("");
-    setContent("");
-    await refresh();
+    setBusy(true);
+    setError("");
+    try {
+      await api("/api/v1/knowledge/documents", {
+        method: "POST",
+        body: JSON.stringify({ title, content, doc_type: "general", source: "upload" }),
+      });
+      setTitle("");
+      setContent("");
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Ingest failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function search(e: FormEvent) {
     e.preventDefault();
-    const res = await api<{ results: Hit[]; stats: Stats }>("/api/v1/knowledge/search", {
-      method: "POST",
-      body: JSON.stringify({ query, limit: 8 }),
-    });
-    setHits(res.results);
-    if (res.stats) setStats(res.stats);
+    setBusy(true);
+    setError("");
+    try {
+      const res = await api<{ results: Hit[]; stats: Stats }>("/api/v1/knowledge/search", {
+        method: "POST",
+        body: JSON.stringify({ query, limit: 8 }),
+      });
+      setHits(res.results);
+      if (res.stats) setStats(res.stats);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Search failed");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -72,6 +90,7 @@ export default function KnowledgePage() {
         title="Knowledge Hub"
         subtitle="Offline dossier corpus + OpenAI embeddings + hybrid RAG search with government-source citations."
       />
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       {stats ? (
         <div className="mb-4 grid gap-3 sm:grid-cols-4">
           <Panel><div className="text-sm text-[var(--ink-muted)]">Documents</div><div className="font-[family-name:var(--font-display)] text-3xl">{stats.documents}</div></Panel>
@@ -89,14 +108,14 @@ export default function KnowledgePage() {
           <form onSubmit={ingest} className="mt-3 space-y-3">
             <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
             <Textarea rows={8} placeholder="Paste protocol, label, or brief…" value={content} onChange={(e) => setContent(e.target.value)} required />
-            <Button type="submit">Ingest & embed</Button>
+            <Button type="submit" disabled={busy}>{busy ? "Working…" : "Ingest & embed"}</Button>
           </form>
         </Panel>
         <Panel>
           <h2 className="font-semibold">Hybrid vector + keyword search</h2>
           <form onSubmit={search} className="mt-3 flex gap-2">
             <Input value={query} onChange={(e) => setQuery(e.target.value)} />
-            <Button type="submit">Search</Button>
+            <Button type="submit" disabled={busy}>{busy ? "…" : "Search"}</Button>
           </form>
           <div className="mt-4 space-y-3">
             {hits.map((h, i) => (
@@ -135,7 +154,9 @@ export default function KnowledgePage() {
               onClick={() =>
                 api<{ title: string; content: string; chunk_count: number; embedded: number }>(
                   `/api/v1/knowledge/documents/${d.id}`,
-                ).then(setSelected)
+                )
+                  .then(setSelected)
+                  .catch((e) => setError(e.message))
               }
             >
               <div className="font-medium">{d.title}</div>

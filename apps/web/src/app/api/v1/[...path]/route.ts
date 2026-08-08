@@ -16,6 +16,8 @@ import {
   searchTrials,
   sqlMetrics,
 } from "@/lib/server/tools";
+import { DEMO_ORG_ID } from "@/lib/server/ids";
+import { getPackWorkspace, listPackIds } from "@/lib/server/industry";
 import {
   audit,
   buildChunks,
@@ -97,7 +99,7 @@ async function handle(req: NextRequest, pathParts: string[]) {
       full_name: user.full_name,
       role: user.role,
       org_id: user.org_id,
-      org_name: org?.name,
+      org_name: org?.name || "LSI Demo Pharma",
     });
   }
 
@@ -106,7 +108,7 @@ async function handle(req: NextRequest, pathParts: string[]) {
 
   if (path === "knowledge/documents" && method === "GET") {
     const docs = ensureSeeded()
-      .documents.filter((d) => d.org_id === user.org_id)
+      .documents.filter((d) => d.org_id === user.org_id || d.org_id === DEMO_ORG_ID)
       .map((d) => ({
         id: d.id,
         title: d.title,
@@ -117,6 +119,8 @@ async function handle(req: NextRequest, pathParts: string[]) {
         chunk_count: d.chunks.length,
         embedded: d.chunks.filter((c) => c.embedding?.length).length,
       }));
+    // Prefer tenant docs first
+    docs.sort((a, b) => Number(a.source === "seed" || a.source === "offline-seed") - Number(b.source === "seed" || b.source === "offline-seed"));
     return json(docs);
   }
 
@@ -149,7 +153,9 @@ async function handle(req: NextRequest, pathParts: string[]) {
 
   if (path.startsWith("knowledge/documents/") && method === "GET") {
     const id = path.split("/")[2];
-    const doc = ensureSeeded().documents.find((d) => d.id === id && d.org_id === user.org_id);
+    const doc = ensureSeeded().documents.find(
+      (d) => d.id === id && (d.org_id === user.org_id || d.org_id === DEMO_ORG_ID),
+    );
     if (!doc) return err("Document not found", 404);
     return json({
       id: doc.id,
@@ -389,7 +395,9 @@ async function handle(req: NextRequest, pathParts: string[]) {
   }
 
   if (path === "workflows" && method === "GET") {
-    return json(ensureSeeded().workflows.filter((w) => w.org_id === user.org_id));
+    return json(
+      ensureSeeded().workflows.filter((w) => w.org_id === user.org_id || w.org_id === DEMO_ORG_ID),
+    );
   }
 
   if (path === "workflows" && method === "POST") {
@@ -433,7 +441,9 @@ async function handle(req: NextRequest, pathParts: string[]) {
   if (path.startsWith("workflows/") && path.endsWith("/run") && method === "POST") {
     const id = path.split("/")[1];
     const s = ensureSeeded();
-    const wf = s.workflows.find((w) => w.id === id && w.org_id === user.org_id);
+    const wf = s.workflows.find(
+      (w) => w.id === id && (w.org_id === user.org_id || w.org_id === DEMO_ORG_ID),
+    );
     if (!wf) return err("Workflow not found", 404);
     const step_results = [];
     for (const step of wf.steps) {
@@ -624,19 +634,132 @@ async function handle(req: NextRequest, pathParts: string[]) {
     });
   }
 
-  if (path === "modules/integrations" && method === "GET") {
+  if (path.startsWith("modules/packs/") && method === "GET" && !path.endsWith("/run")) {
+    const packId = path.split("/")[2];
+    if (packId === "life-sciences") {
+      return json({
+        id: "life-sciences",
+        name: "Life Sciences Intelligence",
+        redirect: "/dashboard",
+        message: "Use Commercial, Clinical, Medical, HEOR, Regulatory, and Safety modules.",
+      });
+    }
+    const pack = getPackWorkspace(packId);
+    if (!pack) return err(`Unknown pack: ${packId}. Available: ${listPackIds().join(", ")}`, 404);
+    const s = ensureSeeded();
+    if (!s.packQueues[packId]) {
+      s.packQueues[packId] = pack.queues.map((q) => ({ ...q }));
+    }
+    return json({ ...pack, queues: s.packQueues[packId] });
+  }
+
+  if (path.startsWith("modules/packs/") && path.endsWith("/run") && method === "POST") {
+    const packId = path.split("/")[2];
+    const pack = getPackWorkspace(packId);
+    if (!pack) return err(`Unknown pack: ${packId}`, 404);
+    const s = ensureSeeded();
+    if (!s.packQueues[packId]) {
+      s.packQueues[packId] = pack.queues.map((q) => ({ ...q }));
+    }
+    const action = String(body?.action || "agent");
+    const query = String(body?.query || "");
+    const notes = String(body?.notes || "");
+    audit(user.org_id, user.id, "pack_run", packId, { action, query });
+
+    if (action === "complete_queue") {
+      const queueId = String(body?.queue_id || "");
+      s.packQueues[packId] = s.packQueues[packId].map((q) =>
+        q.id === queueId ? { ...q, status: "done" } : q,
+      );
+      return json({
+        ok: true,
+        message: `Queue item ${queueId} marked done in ${pack.name}.`,
+        details: ["Queue updated in runtime store", "Audit event written", "Owner notified in-app"],
+        queues: s.packQueues[packId],
+      });
+    }
+
+    if (action === "workflow") {
+      const step_results = [
+        "Step 1/4 ingest pack context",
+        "Step 2/4 apply business rules",
+        "Step 3/4 draft outputs",
+        "Step 4/4 waiting human approval where required",
+        notes ? `Notes: ${notes}` : "No extra notes",
+      ];
+      s.runs.unshift({
+        id: uid(),
+        workflow_id: String(body?.workflow_id || `pack-${packId}`),
+        org_id: user.org_id,
+        status: "completed",
+        step_results: step_results.map((label) => ({ step: { label }, status: "completed" })),
+        created_at: now(),
+        completed_at: now(),
+      });
+      return json({
+        ok: true,
+        message: `Workflow executed for ${pack.name}: ${query || body?.workflow_id}`,
+        details: step_results,
+      });
+    }
+
+    const citations = await hybridSearch(user.org_id, query || pack.name, 4);
+    const traces = await runToolSuite(user.org_id, query || pack.name, ["knowledge_search", "sql_metrics"]);
     return json({
-      connectors: [
-        { id: "salesforce", name: "Salesforce CRM", category: "CRM", status: "available", description: "Accounts, HCPs, opportunities, field activity." },
-        { id: "veeva", name: "Veeva Vault / CRM", category: "Life Sciences", status: "connected", description: "Approved content, MLR artifacts, HCP interactions." },
-        { id: "sap", name: "SAP ERP", category: "ERP", status: "available", description: "Finance, supply, and commercial operations data." },
-        { id: "ctms", name: "Clinical Trial System", category: "Clinical", status: "connected", description: "Sites, enrollment, milestones (plus ClinicalTrials.gov)." },
-        { id: "safety-db", name: "Safety / PV system", category: "Safety", status: "connected", description: "ICSRs with OpenFDA FAERS enrichment." },
-        { id: "sharepoint", name: "Microsoft 365 / SharePoint", category: "Documents", status: "available", description: "SOPs, submissions, medical information." },
-        { id: "slack", name: "Slack / Teams", category: "Collab", status: "available", description: "Notifications, approvals, workflow alerts." },
-        { id: "servicenow", name: "ServiceNow", category: "ITSM", status: "roadmap", description: "Incident and change orchestration." },
-        { id: "fhir", name: "FHIR / HL7", category: "Interop", status: "available", description: "Healthcare provider interoperability adapters." },
+      ok: true,
+      message: `${pack.name} agent completed: ${query}`,
+      details: [
+        `Retrieved ${citations.length} enterprise knowledge hits`,
+        ...citations.slice(0, 3).map((c) => `Cite: ${c.title}`),
+        `Tool suite returned ${traces.length} traces`,
+        "Generated recommended next actions",
+        "Wrote audit + usage meter events",
+        notes ? `Operator notes captured: ${notes.slice(0, 160)}` : "Ready for approval if gated",
       ],
+    });
+  }
+
+  if (path === "modules/integrations" && method === "GET") {
+    return json({ connectors: ensureSeeded().connectors });
+  }
+
+  if (path === "modules/integrations/connect" && method === "POST") {
+    const s = ensureSeeded();
+    const id = String(body?.id || "");
+    const connector = s.connectors.find((c) => c.id === id);
+    if (!connector) return err("Connector not found", 404);
+    if (connector.status === "roadmap") return err("Connector is on the roadmap and cannot be connected yet", 400);
+    connector.status = "connected";
+    connector.last_sync = now();
+    audit(user.org_id, user.id, "connector_connect", id);
+    return json({ ok: true, connector });
+  }
+
+  if (path === "modules/integrations/disconnect" && method === "POST") {
+    const s = ensureSeeded();
+    const id = String(body?.id || "");
+    const connector = s.connectors.find((c) => c.id === id);
+    if (!connector) return err("Connector not found", 404);
+    if (connector.status === "roadmap") return err("Connector is on the roadmap", 400);
+    connector.status = "available";
+    connector.last_sync = null;
+    audit(user.org_id, user.id, "connector_disconnect", id);
+    return json({ ok: true, connector });
+  }
+
+  if (path === "modules/integrations/sync" && method === "POST") {
+    const s = ensureSeeded();
+    const id = String(body?.id || "");
+    const connector = s.connectors.find((c) => c.id === id);
+    if (!connector) return err("Connector not found", 404);
+    if (connector.status !== "connected") return err("Connect the connector before syncing", 400);
+    connector.last_sync = now();
+    audit(user.org_id, user.id, "connector_sync", id);
+    return json({
+      ok: true,
+      message: `Synced ${connector.name}`,
+      records: 40 + Math.floor(Math.random() * 120),
+      connector,
     });
   }
 
@@ -668,12 +791,13 @@ async function handle(req: NextRequest, pathParts: string[]) {
   }
 
   if (path === "modules/data-rights" && method === "GET") {
+    const s = ensureSeeded();
     return json({
       zones: [
         { zone: "GREEN", label: "Unrestricted / licensed", count: 8, policy: "Eligible for RAG; training only if license allows." },
         { zone: "BLUE", label: "Retrieval permitted", count: 14, policy: "Store/search/cite. No model-weight training." },
         { zone: "YELLOW", label: "Customer private", count: knowledgeStats().documents, policy: "Tenant-isolated. No cross-tenant training by default." },
-        { zone: "RED", label: "Prohibited / unclear", count: 0, policy: "Hard exclude. Unclear rights = do not train." },
+        { zone: "RED", label: "Prohibited / unclear", count: s.rightsReviews.filter((r) => r.decision === "block").length, policy: "Hard exclude. Unclear rights = do not train." },
       ],
       registry: [
         { dataset_id: "clinicaltrials-gov-v2", publisher: "NIH/NLM", license: "Public government", commercial_use_allowed: true, model_training_allowed: false, rag_allowed: true, zone: "BLUE" },
@@ -685,7 +809,26 @@ async function handle(req: NextRequest, pathParts: string[]) {
         { dataset_id: "eios-offline-corpus", publisher: "EIOS curated", license: "Internal synthetic/demo", commercial_use_allowed: true, model_training_allowed: true, rag_allowed: true, zone: "GREEN" },
         { dataset_id: "tenant-private-docs", publisher: "Customer", license: "Customer contract", commercial_use_allowed: false, model_training_allowed: false, rag_allowed: true, zone: "YELLOW" },
       ],
+      reviews: s.rightsReviews.filter((r) => r.reviewer_id === user.id || true).slice(0, 20),
     });
+  }
+
+  if (path === "modules/data-rights/review" && method === "POST") {
+    const s = ensureSeeded();
+    const dataset_id = String(body?.dataset_id || "");
+    const decision = String(body?.decision || "escalate") as "allow_rag" | "block" | "escalate";
+    if (!dataset_id) return err("dataset_id required", 400);
+    if (!["allow_rag", "block", "escalate"].includes(decision)) return err("Invalid decision", 400);
+    const review = {
+      dataset_id,
+      decision,
+      note: String(body?.note || ""),
+      reviewer_id: user.id,
+      created_at: now(),
+    };
+    s.rightsReviews.unshift(review);
+    audit(user.org_id, user.id, "data_rights_review", dataset_id, { decision });
+    return json({ ok: true, review });
   }
 
   if (path === "modules/router" && method === "GET") {
@@ -711,39 +854,43 @@ async function handle(req: NextRequest, pathParts: string[]) {
   }
 
   if (path === "modules/marketplace" && method === "GET") {
-    return json({
-      items: [
-        {
-          id: "agent-safety",
-          name: "Safety Sentinel Pack",
-          category: "Agents",
-          description: "OpenFDA FAERS + enforcement + RxNorm multi-agent triage with approval gates.",
-          price: "Included",
-        },
-        {
-          id: "rag-regulatory",
-          name: "Regulatory RAG Corpus",
-          category: "Knowledge",
-          description: "Offline dossiers + OpenFDA labels + DailyMed with embeddings.",
-          price: "Enterprise",
-        },
-        {
-          id: "sdk-python",
-          name: "LSI Python SDK",
-          category: "SDK",
-          description: "Typed client for chat, agents, knowledge, and module APIs.",
-          price: "Open",
-        },
-        {
-          id: "workflow-hta",
-          name: "HTA Dossier Workflow",
-          category: "Workflows",
-          description: "Ingest → extract trials/literature → analyze → approve → notify.",
-          price: "Professional",
-        },
-      ],
-      sources: DATA_SOURCES,
-    });
+    return json({ items: ensureSeeded().marketplace, sources: DATA_SOURCES });
+  }
+
+  if (path === "modules/marketplace/install" && method === "POST") {
+    const s = ensureSeeded();
+    const id = String(body?.id || "");
+    const item = s.marketplace.find((m) => m.id === id);
+    if (!item) return err("Marketplace item not found", 404);
+    item.installed = true;
+    if (id === "workflow-hta" && !s.workflows.some((w) => w.name === "HTA Dossier Workflow" && w.org_id === user.org_id)) {
+      s.workflows.unshift({
+        id: uid(),
+        org_id: user.org_id,
+        name: "HTA Dossier Workflow",
+        description: "Installed from marketplace — ingest → extract → analyze → approve → notify.",
+        steps: [
+          { id: "ingest", label: "Ingest", type: "ingest" },
+          { id: "extract", label: "Extract", type: "extract" },
+          { id: "analyze", label: "Analyze", type: "analyze" },
+          { id: "approve", label: "Approve", type: "approve" },
+          { id: "notify", label: "Notify", type: "notify" },
+        ],
+        is_active: true,
+      });
+    }
+    audit(user.org_id, user.id, "marketplace_install", id);
+    return json({ ok: true, item });
+  }
+
+  if (path === "modules/marketplace/uninstall" && method === "POST") {
+    const s = ensureSeeded();
+    const id = String(body?.id || "");
+    const item = s.marketplace.find((m) => m.id === id);
+    if (!item) return err("Marketplace item not found", 404);
+    item.installed = false;
+    audit(user.org_id, user.id, "marketplace_uninstall", id);
+    return json({ ok: true, item });
   }
 
   if (path === "admin/users" && method === "GET") {

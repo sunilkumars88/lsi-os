@@ -16,6 +16,8 @@ type Job = {
 export default function ApprovalsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState<string | null>(null);
 
   async function refresh() {
     const all = await api<Job[]>("/api/v1/agents/jobs");
@@ -24,17 +26,36 @@ export default function ApprovalsPage() {
   }
 
   useEffect(() => {
-    refresh().catch(console.error);
+    refresh().catch((e) => {
+      setError(e.message);
+      setLoading(false);
+    });
   }, []);
 
   async function approve(id: string) {
-    await api(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
-    await refresh();
+    setBusy(id);
+    setError("");
+    try {
+      await api(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Approve failed");
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function reject(id: string) {
-    await api(`/api/v1/agents/jobs/${id}/reject`, { method: "POST" });
-    await refresh();
+    setBusy(id);
+    setError("");
+    try {
+      await api(`/api/v1/agents/jobs/${id}/reject`, { method: "POST" });
+      await refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Reject failed");
+    } finally {
+      setBusy(null);
+    }
   }
 
   if (loading) return <Loading />;
@@ -45,6 +66,7 @@ export default function ApprovalsPage() {
         title="Human Approvals"
         subtitle="Regulated communications and high-risk agent outputs require human-in-the-loop before completion."
       />
+      {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       <div className="space-y-3">
         {jobs.filter((j) => j.status === "awaiting_approval").map((j) => (
           <Panel key={j.id}>
@@ -58,8 +80,12 @@ export default function ApprovalsPage() {
                 <p className="mt-2 text-sm text-[var(--ink-muted)]">{j.result_preview || "Awaiting review"}</p>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => approve(j.id)}>Approve</Button>
-                <Button variant="secondary" onClick={() => reject(j.id)}>Reject</Button>
+                <Button disabled={busy === j.id} onClick={() => approve(j.id)}>
+                  {busy === j.id ? "…" : "Approve"}
+                </Button>
+                <Button variant="secondary" disabled={busy === j.id} onClick={() => reject(j.id)}>
+                  Reject
+                </Button>
               </div>
             </div>
           </Panel>
