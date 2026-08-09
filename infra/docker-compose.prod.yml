@@ -1,0 +1,54 @@
+# Production profile overlay for EIOS.
+# Usage:
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.prod.yml --profile prod up -d --build
+#
+# Requires OPENAI_API_KEY (and ideally SMTP_*) in the environment.
+
+services:
+  postgres:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  minio:
+    restart: unless-stopped
+
+  api:
+    profiles: ["prod"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      SEED_ON_STARTUP: ${SEED_ON_STARTUP:-true}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-https://localhost:3000}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  ai:
+    profiles: ["prod"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      LLM_PROVIDER: openai
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  web:
+    profiles: ["prod"]
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:4000}

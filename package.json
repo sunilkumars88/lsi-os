@@ -1,18 +1,38 @@
 {
-  "name": "lsi-os",
-  "version": "1.0.0",
+  "name": "eios",
+  "version": "2.0.0",
   "private": true,
-  "description": "Life Sciences Intelligence OS — AI-native platform for pharma, biotech, and healthcare",
+  "description": "Enterprise Intelligence Operating System — Connect. Understand. Automate. Govern.",
   "workspaces": [
     "apps/web",
-    "packages/*"
+    "apps/api-nest",
+    "packages/*",
+    "packages/connectors/*"
   ],
   "scripts": {
+    "dev": "turbo run dev --parallel",
     "dev:web": "npm run dev --workspace=apps/web",
-    "dev:api": "cd apps/api && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "dev:api": "npm run start:dev --workspace=apps/api-nest",
+    "dev:ai": "cd apps/ai && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "turbo run build",
     "build:web": "npm run build --workspace=apps/web",
-    "seed": "cd apps/api && python -m app.db.seed",
+    "build:api": "npm run build --workspace=apps/api-nest",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "seed": "cd apps/ai && python -m app.db.seed",
     "docker:up": "docker compose -f infra/docker-compose.yml up --build",
-    "docker:down": "docker compose -f infra/docker-compose.yml down"
+    "docker:down": "docker compose -f infra/docker-compose.yml down",
+    "smoke": "node apps/web/scripts/smoke.mjs",
+    "smoke:nest": "node apps/web/scripts/smoke-nest.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.2",
+    "turbo": "^2.5.0",
+    "typescript": "^5.7.2"
+  },
+  "packageManager": "npm@10.9.7",
+  "engines": {
+    "node": ">=20"
   }
 }
