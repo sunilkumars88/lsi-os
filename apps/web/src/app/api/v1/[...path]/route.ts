@@ -103,6 +103,19 @@ async function handle(req: NextRequest, pathParts: string[]) {
     });
   }
 
+  if (path === "ready" && method === "GET") {
+    const probe = await probeOpenAI();
+    return json({
+      status: "ready",
+      checks: {
+        database: "memory",
+        openaiConfigured: probe.configured,
+        openaiOk: probe.ok,
+        smtpConfigured: Boolean(process.env.SMTP_HOST),
+      },
+    });
+  }
+
   const user = await requireUser(req);
   if (!user) return err("Not authenticated", 401);
 
