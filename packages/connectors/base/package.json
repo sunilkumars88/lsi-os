@@ -1,0 +1,11 @@
+{
+  "name": "@eios/connector-base",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Abstract base connector for EIOS integration hub",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@eios/types": "1.0.0"
+  }
+}

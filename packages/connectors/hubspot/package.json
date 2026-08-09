@@ -1,0 +1,11 @@
+{
+  "name": "@eios/connector-hubspot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "HubSpot CRM connector for EIOS",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@eios/connector-base": "1.0.0"
+  }
+}

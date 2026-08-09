@@ -18,6 +18,9 @@ coverage/
 *.db
 apps/api/.env
 apps/api/*.db
+apps/api-nest/*.db
+apps/api-nest/.data/
+.data/
 apps/web/.env.local
 infra/.env
 _extracted/

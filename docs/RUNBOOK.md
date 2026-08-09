@@ -30,4 +30,4 @@ docker compose -f infra/docker-compose.yml up --build
 
 ## LLM keys (optional)
 
-Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment. Without keys, the demo brain still answers using RAG + tools.
+Set `OPENAI_API_KEY` in the environment (OpenAI only). Without a key, the demo brain still answers using RAG + tools.

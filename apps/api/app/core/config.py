@@ -19,10 +19,8 @@ class Settings(BaseSettings):
     minio_bucket: str = "lsi-documents"
     minio_secure: bool = False
     openai_api_key: str = ""
-    anthropic_api_key: str = ""
     llm_provider: str = "auto"
     openai_model: str = "gpt-4o-mini"
-    anthropic_model: str = "claude-3-5-haiku-latest"
     seed_on_startup: bool = True
     embedding_dims: int = 384
 

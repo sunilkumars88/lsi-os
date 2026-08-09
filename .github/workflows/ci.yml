@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "cursor/**"]
+  pull_request:
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+        working-directory: .
+      - run: npm run lint --if-present
+      - run: npm run build
+
+  api-nest:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api-nest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+        working-directory: .
+      - run: npm run build
+      - run: npm test --if-present
+      - name: Smoke Nest API (sqlite)
+        working-directory: .
+        env:
+          DATABASE_URL: sqlite:///./eios-ci.db
+          JWT_SECRET: eios-ci-secret
+          PORT: "4000"
+          SEED_ON_STARTUP: "true"
+          CORS_ORIGINS: http://localhost:3000
+        run: |
+          node apps/api-nest/dist/main.js &
+          PID=$!
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:4000/health >/dev/null; then break; fi
+            sleep 1
+          done
+          node apps/web/scripts/smoke-nest.mjs
+          kill $PID
+
+  ai:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/ai
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -c "from app.main import app; print(app.title)"
+      - run: python -c "from app.api.v1.embeddings import create_embeddings; print('embeddings_ok')"

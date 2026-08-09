@@ -2,7 +2,13 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { Badge, Button, Input, PageHeader, Panel, Textarea } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, isNestBackend } from "@/lib/api";
+import {
+  nestDocToView,
+  nestSearchHitToView,
+  type NestDocument,
+  type NestSearchHit,
+} from "@/lib/nest-adapters";
 
 type Doc = {
   id: string;
@@ -12,8 +18,18 @@ type Doc = {
   preview?: string;
   chunk_count?: number;
   embedded?: number;
+  content?: string;
 };
-type Hit = { title: string; content: string; score: number; doc_type: string; source?: string };
+
+type Hit = {
+  title: string;
+  content: string;
+  score: number;
+  doc_type: string;
+  source?: string;
+  citation?: { documentId?: string; chunkId?: string };
+};
+
 type Stats = {
   documents: number;
   chunks: number;
@@ -24,17 +40,37 @@ type Stats = {
 };
 
 export default function KnowledgePage() {
+  const nest = isNestBackend();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [query, setQuery] = useState("CardiaX enrollment safety HFpEF");
   const [hits, setHits] = useState<Hit[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [selected, setSelected] = useState<{ title: string; content: string; chunk_count?: number; embedded?: number } | null>(null);
+  const [selected, setSelected] = useState<{
+    title: string;
+    content: string;
+    chunk_count?: number;
+    embedded?: number;
+  } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [file, setFile] = useState<File | null>(null);
 
   async function refresh() {
+    if (nest) {
+      const d = await api<NestDocument[]>("/api/v1/knowledge/documents");
+      const mapped = d.map(nestDocToView);
+      setDocs(mapped);
+      setStats({
+        documents: mapped.length,
+        chunks: mapped.reduce((n, x) => n + (x.chunk_count || 0), 0),
+        embedded_chunks: mapped.reduce((n, x) => n + (x.embedded || 0), 0),
+        embedding_ready: true,
+        openai_configured: true,
+      });
+      return;
+    }
     const [d, s] = await Promise.all([
       api<Doc[]>("/api/v1/knowledge/documents"),
       api<Stats>("/api/v1/knowledge/stats"),
@@ -52,12 +88,40 @@ export default function KnowledgePage() {
     setBusy(true);
     setError("");
     try {
-      await api("/api/v1/knowledge/documents", {
-        method: "POST",
-        body: JSON.stringify({ title, content, doc_type: "general", source: "upload" }),
-      });
+      if (nest && file) {
+        const form = new FormData();
+        form.append("file", file);
+        form.append("title", title || file.name);
+        form.append("source", "upload");
+        form.append("docType", "general");
+        try {
+          await api("/api/v1/knowledge/documents/upload", { method: "POST", body: form });
+        } catch {
+          // Multipart may not exist yet — fall back to text create.
+          const text = await file.text();
+          await api("/api/v1/knowledge/documents", {
+            method: "POST",
+            body: JSON.stringify({
+              title: title || file.name,
+              content: text,
+              docType: "general",
+              source: "upload",
+            }),
+          });
+        }
+      } else {
+        await api("/api/v1/knowledge/documents", {
+          method: "POST",
+          body: JSON.stringify(
+            nest
+              ? { title, content, docType: "general", source: "upload" }
+              : { title, content, doc_type: "general", source: "upload" },
+          ),
+        });
+      }
       setTitle("");
       setContent("");
+      setFile(null);
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ingest failed");
@@ -71,12 +135,20 @@ export default function KnowledgePage() {
     setBusy(true);
     setError("");
     try {
-      const res = await api<{ results: Hit[]; stats: Stats }>("/api/v1/knowledge/search", {
-        method: "POST",
-        body: JSON.stringify({ query, limit: 8 }),
-      });
-      setHits(res.results);
-      if (res.stats) setStats(res.stats);
+      if (nest) {
+        const res = await api<NestSearchHit[]>("/api/v1/knowledge/search", {
+          method: "POST",
+          body: JSON.stringify({ query, topK: 8 }),
+        });
+        setHits((Array.isArray(res) ? res : []).map(nestSearchHitToView));
+      } else {
+        const res = await api<{ results: Hit[]; stats: Stats }>("/api/v1/knowledge/search", {
+          method: "POST",
+          body: JSON.stringify({ query, limit: 8 }),
+        });
+        setHits(res.results);
+        if (res.stats) setStats(res.stats);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Search failed");
     } finally {
@@ -84,21 +156,65 @@ export default function KnowledgePage() {
     }
   }
 
+  async function openDoc(id: string) {
+    try {
+      if (nest) {
+        const d = await api<NestDocument>(`/api/v1/knowledge/documents/${id}`);
+        const view = nestDocToView(d);
+        setSelected({
+          title: view.title,
+          content: view.content || "",
+          chunk_count: view.chunk_count ?? d.chunks?.length,
+          embedded: view.embedded,
+        });
+      } else {
+        const d = await api<{
+          title: string;
+          content: string;
+          chunk_count: number;
+          embedded: number;
+        }>(`/api/v1/knowledge/documents/${id}`);
+        setSelected(d);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Load failed");
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Knowledge Hub"
-        subtitle="Offline dossier corpus + OpenAI embeddings + hybrid RAG search with government-source citations."
+        subtitle={
+          nest
+            ? "Nest knowledge store — text ingest, optional file upload, and citation-aware search."
+            : "Offline dossier corpus + OpenAI embeddings + hybrid RAG search with government-source citations."
+        }
       />
       {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       {stats ? (
         <div className="mb-4 grid gap-3 sm:grid-cols-4">
-          <Panel><div className="text-sm text-[var(--ink-muted)]">Documents</div><div className="font-[family-name:var(--font-display)] text-3xl">{stats.documents}</div></Panel>
-          <Panel><div className="text-sm text-[var(--ink-muted)]">Chunks</div><div className="font-[family-name:var(--font-display)] text-3xl">{stats.chunks}</div></Panel>
-          <Panel><div className="text-sm text-[var(--ink-muted)]">Embedded</div><div className="font-[family-name:var(--font-display)] text-3xl">{stats.embedded_chunks}</div></Panel>
+          <Panel>
+            <div className="text-sm text-[var(--ink-muted)]">Documents</div>
+            <div className="font-[family-name:var(--font-display)] text-3xl">{stats.documents}</div>
+          </Panel>
+          <Panel>
+            <div className="text-sm text-[var(--ink-muted)]">Chunks</div>
+            <div className="font-[family-name:var(--font-display)] text-3xl">{stats.chunks}</div>
+          </Panel>
+          <Panel>
+            <div className="text-sm text-[var(--ink-muted)]">Embedded</div>
+            <div className="font-[family-name:var(--font-display)] text-3xl">
+              {stats.embedded_chunks}
+            </div>
+          </Panel>
           <Panel>
             <div className="text-sm text-[var(--ink-muted)]">Embeddings</div>
-            <div className="mt-2"><Badge tone={stats.openai_configured ? "good" : "warn"}>{stats.openai_configured ? "OpenAI active" : "Local fallback"}</Badge></div>
+            <div className="mt-2">
+              <Badge tone={stats.openai_configured ? "good" : "warn"}>
+                {stats.openai_configured ? "OpenAI active" : "Local fallback"}
+              </Badge>
+            </div>
           </Panel>
         </div>
       ) : null}
@@ -106,16 +222,40 @@ export default function KnowledgePage() {
         <Panel>
           <h2 className="font-semibold">Ingest document</h2>
           <form onSubmit={ingest} className="mt-3 space-y-3">
-            <Input placeholder="Title" value={title} onChange={(e) => setTitle(e.target.value)} required />
-            <Textarea rows={8} placeholder="Paste protocol, label, or brief…" value={content} onChange={(e) => setContent(e.target.value)} required />
-            <Button type="submit" disabled={busy}>{busy ? "Working…" : "Ingest & embed"}</Button>
+            <Input
+              placeholder="Title"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              required={!file}
+            />
+            <Textarea
+              rows={8}
+              placeholder="Paste protocol, label, or brief…"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              required={!file}
+            />
+            {nest ? (
+              <Input
+                type="file"
+                accept=".txt,.md,.json,.csv,.pdf,.html"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
+            ) : null}
+            <Button type="submit" disabled={busy}>
+              {busy ? "Working…" : file ? "Upload & embed" : "Ingest & embed"}
+            </Button>
           </form>
         </Panel>
         <Panel>
-          <h2 className="font-semibold">Hybrid vector + keyword search</h2>
+          <h2 className="font-semibold">
+            {nest ? "Search with citations" : "Hybrid vector + keyword search"}
+          </h2>
           <form onSubmit={search} className="mt-3 flex gap-2">
             <Input value={query} onChange={(e) => setQuery(e.target.value)} />
-            <Button type="submit" disabled={busy}>{busy ? "…" : "Search"}</Button>
+            <Button type="submit" disabled={busy}>
+              {busy ? "…" : "Search"}
+            </Button>
           </form>
           <div className="mt-4 space-y-3">
             {hits.map((h, i) => (
@@ -124,6 +264,9 @@ export default function KnowledgePage() {
                   <span className="font-medium">{h.title}</span>
                   <Badge>{h.score}</Badge>
                   {h.source ? <Badge tone="neutral">{h.source}</Badge> : null}
+                  {h.citation?.chunkId ? (
+                    <Badge tone="good">chunk {h.citation.chunkId.slice(0, 8)}</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-1 text-[var(--ink-muted)]">{h.content.slice(0, 220)}…</p>
               </div>
@@ -136,9 +279,14 @@ export default function KnowledgePage() {
           <h2 className="font-semibold">Connected data sources</h2>
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {stats.sources.map((s) => (
-              <div key={s.id} className="flex items-center justify-between border-b border-[var(--line)] py-2 text-sm">
+              <div
+                key={s.id}
+                className="flex items-center justify-between border-b border-[var(--line)] py-2 text-sm"
+              >
                 <span>{s.name}</span>
-                <Badge tone={s.status === "active" || s.status?.includes?.("active") ? "good" : "warn"}>{s.type}</Badge>
+                <Badge tone={s.status === "active" || s.status?.includes?.("active") ? "good" : "warn"}>
+                  {s.type}
+                </Badge>
               </div>
             ))}
           </div>
@@ -151,19 +299,17 @@ export default function KnowledgePage() {
             <button
               key={d.id}
               className="rounded-lg border border-[var(--line)] p-4 text-left hover:bg-[var(--surface-2)]"
-              onClick={() =>
-                api<{ title: string; content: string; chunk_count: number; embedded: number }>(
-                  `/api/v1/knowledge/documents/${d.id}`,
-                )
-                  .then(setSelected)
-                  .catch((e) => setError(e.message))
-              }
+              onClick={() => openDoc(d.id)}
             >
               <div className="font-medium">{d.title}</div>
               <div className="mt-1 flex flex-wrap gap-2">
                 <Badge>{d.doc_type}</Badge>
                 <Badge tone="neutral">{d.source}</Badge>
-                <Badge tone="good">{d.embedded ?? 0}/{d.chunk_count ?? 0} embedded</Badge>
+                {d.chunk_count != null ? (
+                  <Badge tone="good">
+                    {d.embedded ?? 0}/{d.chunk_count} embedded
+                  </Badge>
+                ) : null}
               </div>
               <p className="mt-2 text-sm text-[var(--ink-muted)]">{d.preview}</p>
             </button>
@@ -172,7 +318,10 @@ export default function KnowledgePage() {
         {selected ? (
           <div className="mt-4 whitespace-pre-wrap rounded-lg bg-[var(--surface-2)] p-4 text-sm">
             <div className="mb-2 font-semibold">
-              {selected.title} · {selected.chunk_count} chunks · {selected.embedded} embedded
+              {selected.title}
+              {selected.chunk_count != null
+                ? ` · ${selected.chunk_count} chunks · ${selected.embedded ?? 0} embedded`
+                : null}
             </div>
             {selected.content}
           </div>

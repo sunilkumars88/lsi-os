@@ -10,6 +10,7 @@ export type User = {
   role: string;
   org_id: string;
   org_name?: string | null;
+  workspace_id?: string | null;
 };
 
 type AuthCtx = {
@@ -23,6 +24,24 @@ type AuthCtx = {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
+function normalizeUser(raw: Record<string, unknown>): User {
+  return {
+    id: String(raw.id || ""),
+    email: String(raw.email || ""),
+    full_name: String(raw.full_name || raw.fullName || ""),
+    role: String(raw.role || "viewer"),
+    org_id: String(raw.org_id || raw.orgId || ""),
+    org_name: (raw.org_name || raw.orgName || null) as string | null,
+    workspace_id: (raw.workspace_id || raw.workspaceId || null) as string | null,
+  };
+}
+
+function extractToken(res: Record<string, unknown>): string {
+  const token = res.access_token || res.accessToken;
+  if (!token || typeof token !== "string") throw new Error("No access token in login response");
+  return token;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -35,8 +54,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     try {
-      const me = await api<User>("/api/v1/auth/me");
-      setUser(me);
+      const me = await api<Record<string, unknown>>("/api/v1/auth/me");
+      setUser(normalizeUser(me));
     } catch {
       setToken(null);
       setUser(null);
@@ -50,20 +69,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   const login = async (email: string, password: string) => {
-    const res = await api<{ access_token: string }>("/api/v1/auth/login", {
+    const res = await api<Record<string, unknown>>("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    setToken(res.access_token);
+    setToken(extractToken(res));
     await refresh();
   };
 
   const register = async (payload: { email: string; password: string; full_name: string; org_name: string }) => {
-    const res = await api<{ access_token: string }>("/api/v1/auth/register", {
+    const res = await api<Record<string, unknown>>("/api/v1/auth/register", {
       method: "POST",
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        email: payload.email,
+        password: payload.password,
+        fullName: payload.full_name,
+        orgName: payload.org_name,
+      }),
     });
-    setToken(res.access_token);
+    setToken(extractToken(res));
     await refresh();
   };
 

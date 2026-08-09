@@ -2,15 +2,15 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: lsi
-      POSTGRES_PASSWORD: lsi_secret
-      POSTGRES_DB: lsi_os
+      POSTGRES_USER: eios
+      POSTGRES_PASSWORD: eios_secret
+      POSTGRES_DB: eios
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U lsi -d lsi_os"]
+      test: ["CMD-SHELL", "pg_isready -U eios -d eios"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -29,8 +29,8 @@ services:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: lsi_minio
-      MINIO_ROOT_PASSWORD: lsi_minio_secret
+      MINIO_ROOT_USER: eios_minio
+      MINIO_ROOT_PASSWORD: eios_minio_secret
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -39,21 +39,48 @@ services:
 
   api:
     build:
-      context: ../apps/api
+      context: ../apps/api-nest
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgresql+psycopg://lsi:lsi_secret@postgres:5432/lsi_os
+      DATABASE_URL: postgresql://eios:eios_secret@postgres:5432/eios
       REDIS_URL: redis://redis:6379/0
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: lsi_minio
-      MINIO_SECRET_KEY: lsi_minio_secret
-      MINIO_BUCKET: lsi-documents
-      JWT_SECRET: change-me-in-production-lsi-os-2024
+      MINIO_ACCESS_KEY: eios_minio
+      MINIO_SECRET_KEY: eios_minio_secret
+      MINIO_BUCKET: eios-documents
+      JWT_SECRET: change-me-in-production-eios-2026
       CORS_ORIGINS: http://localhost:3000,http://web:3000
+      AI_SERVICE_URL: http://ai:8000
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-auto}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
       SEED_ON_STARTUP: "true"
+      PORT: "4000"
+    ports:
+      - "4000:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  ai:
+    build:
+      context: ../apps/ai
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://eios:eios_secret@postgres:5432/eios
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: eios_minio
+      MINIO_SECRET_KEY: eios_minio_secret
+      MINIO_BUCKET: eios-documents
+      JWT_SECRET: change-me-in-production-eios-2026
+      CORS_ORIGINS: http://localhost:3000,http://localhost:4000,http://api:4000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      LLM_PROVIDER: auto
+      SEED_ON_STARTUP: "true"
+      NEST_API_URL: http://api:4000
     ports:
       - "8000:8000"
     depends_on:
@@ -69,13 +96,16 @@ services:
       context: ../apps/web
       dockerfile: Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: http://localhost:8000
+        NEXT_PUBLIC_API_URL: http://localhost:4000
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8000
+      NEXT_PUBLIC_API_URL: http://localhost:4000
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      JWT_SECRET: change-me-in-production-eios-2026
     ports:
       - "3000:3000"
     depends_on:
       - api
+      - ai
 
 volumes:
   postgres_data:

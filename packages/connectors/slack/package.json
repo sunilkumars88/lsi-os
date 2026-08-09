@@ -1,0 +1,11 @@
+{
+  "name": "@eios/connector-slack",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Slack collaboration connector for EIOS",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@eios/connector-base": "1.0.0"
+  }
+}

@@ -68,7 +68,7 @@ export default function LandingPage() {
             transition={{ delay: 0.08 }}
             className="mt-5 max-w-3xl text-2xl font-medium leading-snug text-teal-50 sm:text-3xl"
           >
-            The Enterprise Intelligence Operating System.
+            The enterprise standard for governed AI — the CIBIL score for how your organization uses intelligence.
           </motion.h1>
           <motion.p
             initial={{ opacity: 0, y: 16 }}
@@ -76,8 +76,9 @@ export default function LandingPage() {
             transition={{ delay: 0.16 }}
             className="mt-4 max-w-2xl text-base text-teal-100/85"
           >
-            Not another chatbot. Connect CRM, clinical, safety, ERP, and documents. Ground answers in your
-            knowledge. Orchestrate agents with approvals. Deliver outcomes ChatGPT cannot reach alone.
+            Connect. Understand. Automate. Govern. EIOS is the Enterprise Intelligence Operating System:
+            tenant-isolated memory, live system connectors, agent orchestration with human approvals, and
+            audit-ready governance — so AI runs real work inside regulated enterprises, not beside them.
           </motion.p>
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -105,7 +106,7 @@ export default function LandingPage() {
           The LLM is the brain. EIOS is the enterprise.
         </h2>
         <p className="mt-3 max-w-2xl text-[var(--ink-muted)]">
-          Memory, data access, automation, permissions, and governance—so AI runs real work inside your company.
+          Memory, data access, automation, permissions, and governance — the operating layer that turns models into accountable enterprise systems.
         </p>
         <div className="mt-10 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
           {[

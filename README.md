@@ -1,43 +1,57 @@
-# Enterprise Intelligence OS (EIOS)
+# EIOS — Enterprise Intelligence Operating System
 
-AI-native **Enterprise Intelligence Operating System** — not a ChatGPT wrapper.
+**Tagline:** Connect. Understand. Automate. Govern.
 
-Connect enterprise systems, ground answers in governed knowledge, orchestrate agents with human approvals, and run industry packs (Life Sciences first).
+Production monorepo implementing the EIOS technical guide, build checklist, and market adoption strategy — **OpenAI only** (no Anthropic).
 
-## Why it beats a general LLM
+## Architecture
 
-A general LLM can summarize a paper. EIOS can retrieve approved content, pull live clinical/safety sources, check permissions, run multi-step agents, require approvals, assign follow-ups, and write audit trails inside a tenant.
+| Service | Path | Port | Role |
+|---------|------|------|------|
+| Web | `apps/web` | 3000 | Next.js UI + optional same-origin BFF |
+| API | `apps/api-nest` | 4000 | NestJS platform API (auth, tenants, knowledge, connectors, workflows, packs, billing) |
+| AI | `apps/ai` | 8000 | FastAPI agents, RAG tools, pack agents |
+| Legacy API | `apps/api` | — | Retained for compatibility; not default in Compose |
 
-| Layer | Role |
-|-------|------|
-| L5 | Customer private intelligence |
-| L4 | Industry packs |
-| L3 | Proprietary OS intelligence (ontology, workflows, agents) |
-| L2 | Multi-LLM router |
-| L1 | Cloud, security, data platform |
+Data: Postgres 16 + pgvector, Redis 7, MinIO (S3-compatible).
 
 ## Quick start
 
 ```bash
-cd apps/web
-npm install
-npm run dev
+cp .env.example .env
+# Set OPENAI_API_KEY for production LLM
+
+# Full stack (requires Docker)
+npm run docker:up
+
+# Or local services
+npm run dev:api    # Nest on :4000
+npm run dev:ai     # FastAPI on :8000
+npm run dev:web    # Next on :3000
 ```
 
-Open http://localhost:3000 — demo `admin@lsi.os` / `demo1234`
+Demo login: `admin@lsi.os` / `demo1234`
 
-## Core OS modules
+## Industry packs
 
-Command Center · Intelligence Copilot · Agent Runtime · Workflow Engine · Human Approvals · Enterprise Memory · Knowledge Graph · Data Rights Registry · Integration Hub · Model Router · Industry Packs · Marketplace · Governance
+- **Life Sciences** — Trial coordinator, safety monitor, protocol compliance, regulatory docs (₹50k / ₹2L / ₹5L+ per month)
+- **Banking** — Loan origination, fraud, AML/KYC, support
+- **Insurance** — Claims triage, underwriting, SIU
 
-## Life Sciences pack (active)
+## What you must configure
 
-Commercial · Medical Affairs · Clinical · HEOR/RWE · Regulatory · Pharmacovigilance
+See [docs/BUILD_STATUS.md](docs/BUILD_STATUS.md) and [.env.example](.env.example):
 
-## Data strategy
+1. Valid `OPENAI_API_KEY`
+2. SMTP / Resend for magic links & invites
+3. Optional OAuth (Google / Microsoft)
+4. Optional live connector keys (Salesforce, HubSpot, Stripe, Razorpay, Slack)
+5. Optional AWS for managed RDS/S3/ECS (Compose maps 1:1)
 
-Data Rights Registry with GREEN / BLUE / YELLOW / RED zones. Government/open APIs for retrieval. Customer data tenant-isolated. Do not train on unclear rights.
+Sandbox connectors work without vendor keys.
 
-## Deploy
+## Docs
 
-Vercel hosts the Next.js app (UI + same-origin `/api/v1`). Optional `OPENAI_API_KEY` for cloud synthesis/embeddings.
+- [Deployment](docs/deployment.md)
+- [Build status](docs/BUILD_STATUS.md)
+- [Compliance stubs](docs/compliance/)
