@@ -38,11 +38,12 @@ Status values: **Done** (in code), **Partial** (core shipped, fidelity deferred)
 | 4 | Deployment guide + Compose prod profile | Done | code | `docs/deployment.md`, `docker-compose.prod.yml` |
 | 4 | Settings: OpenAI probe, connector creds, SMTP | Done | code | |
 | 4 | Remove Anthropic | Done | code | OpenAI-only routers; RUNBOOK cleaned |
-| 4 | Valid OpenAI key in prod | Needs account | account | Current Vercel key rejected |
-| 4 | SMTP for magic link / invites | Needs account | account | |
-| 4 | Live connector OAuth/API keys | Needs account | account | |
+| 4 | Valid OpenAI key in prod | Done | account | Live on Vercel — gpt-4o-mini + embeddings |
+| 4 | SMTP for magic link / invites | Needs account | account | Console provider until SMTP set |
+| 4 | Live connector OAuth/API keys | Needs account | account | Sandbox connectors live without keys |
 | 4 | AWS RDS/S3/ECS migration | Deferred | account | Compose maps 1:1 when AWS ready |
-| 4 | Vercel web deploy | Needs account | account | Point `NEXT_PUBLIC_API_URL` at Nest |
+| 4 | Vercel web deploy | Done | code | https://web-delta-amber-30.vercel.app (BFF + OpenAI) |
+| 4 | Nest/AI hosted API | Partial | account | In repo + Compose; Vercel serves BFF parity aliases |
 
 ## Connector key matrix
 

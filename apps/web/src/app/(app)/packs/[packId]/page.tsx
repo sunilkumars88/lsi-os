@@ -37,12 +37,6 @@ export default function PackWorkspacePage() {
   useEffect(() => {
     if (!packId) return;
 
-    // BFF life-sciences console lives under domain modules; Nest serves the pack registry.
-    if (!nest && packId === "life-sciences") {
-      window.location.href = "/dashboard";
-      return;
-    }
-
     setPackId(packId);
     setError("");
     setResult(null);

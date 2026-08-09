@@ -636,21 +636,26 @@ async function handle(req: NextRequest, pathParts: string[]) {
 
   if (path.startsWith("modules/packs/") && method === "GET" && !path.endsWith("/run")) {
     const packId = path.split("/")[2];
-    if (packId === "life-sciences") {
-      return json({
-        id: "life-sciences",
-        name: "Life Sciences Intelligence",
-        redirect: "/dashboard",
-        message: "Use Commercial, Clinical, Medical, HEOR, Regulatory, and Safety modules.",
-      });
-    }
     const pack = getPackWorkspace(packId);
     if (!pack) return err(`Unknown pack: ${packId}. Available: ${listPackIds().join(", ")}`, 404);
     const s = ensureSeeded();
     if (!s.packQueues[packId]) {
       s.packQueues[packId] = pack.queues.map((q) => ({ ...q }));
     }
-    return json({ ...pack, queues: s.packQueues[packId] });
+    return json({
+      ...pack,
+      queues: s.packQueues[packId],
+      description: pack.name,
+      modules:
+        packId === "life-sciences"
+          ? [
+              { href: "/commercial", label: "Commercial" },
+              { href: "/clinical", label: "Clinical" },
+              { href: "/safety", label: "Safety" },
+              { href: "/regulatory", label: "Regulatory" },
+            ]
+          : [],
+    });
   }
 
   if (path.startsWith("modules/packs/") && path.endsWith("/run") && method === "POST") {
@@ -705,15 +710,38 @@ async function handle(req: NextRequest, pathParts: string[]) {
 
     const citations = await hybridSearch(user.org_id, query || pack.name, 4);
     const traces = await runToolSuite(user.org_id, query || pack.name, ["knowledge_search", "sql_metrics"]);
+    const llm = await completeChat({
+      system: `You are an EIOS ${pack.name} pack agent. Be concise, actionable, and cite knowledge titles when relevant. OpenAI-only production path.`,
+      messages: [
+        {
+          role: "user",
+          content: `Pack: ${pack.name}\nAction: ${action}\nQuery: ${query || pack.name}\nNotes: ${notes || "none"}\nKnowledge:\n${citations
+            .slice(0, 4)
+            .map((c, i) => `[${i + 1}] ${c.title}: ${c.content.slice(0, 220)}`)
+            .join("\n")}`,
+        },
+      ],
+    });
+    ensureSeeded().usage.push({
+      id: uid(),
+      org_id: user.org_id,
+      provider: llm.provider,
+      model: llm.model,
+      tokens_in: llm.tokens_in,
+      tokens_out: llm.tokens_out,
+      cost_usd: llm.cost_usd,
+      created_at: now(),
+    });
     return json({
       ok: true,
-      message: `${pack.name} agent completed: ${query}`,
+      message: llm.content.slice(0, 500) || `${pack.name} agent completed: ${query}`,
+      provider: llm.provider,
+      model: llm.model,
       details: [
+        `Provider: ${llm.provider}/${llm.model}`,
         `Retrieved ${citations.length} enterprise knowledge hits`,
         ...citations.slice(0, 3).map((c) => `Cite: ${c.title}`),
         `Tool suite returned ${traces.length} traces`,
-        "Generated recommended next actions",
-        "Wrote audit + usage meter events",
         notes ? `Operator notes captured: ${notes.slice(0, 160)}` : "Ready for approval if gated",
       ],
     });
@@ -962,6 +990,400 @@ async function handle(req: NextRequest, pathParts: string[]) {
       meters.set(key, cur);
     }
     return json({ meters: [...meters.values()] });
+  }
+
+  // --- Nest-compatible aliases (Vercel BFF parity) ---
+  if (path === "ready" && method === "GET") {
+    const probe = await probeOpenAI();
+    return json({
+      status: "ready",
+      checks: {
+        database: "memory",
+        openaiConfigured: probe.configured,
+        openaiOk: probe.ok,
+        smtpConfigured: Boolean(process.env.SMTP_HOST),
+      },
+    });
+  }
+
+  if (path === "packs" && method === "GET") {
+    return json(
+      listPackIds().map((id) => {
+        const p = getPackWorkspace(id)!;
+        return {
+          id: p.id,
+          name: p.name,
+          industry: id,
+          description: p.name,
+          agents: p.agents.map((a) => ({
+            id: a.id,
+            name: a.name,
+            description: a.outcome,
+            requiresApproval: false,
+          })),
+          workflows: p.workflows.map((w) => ({
+            id: w.id,
+            name: w.name,
+            description: w.status,
+          })),
+          actions: p.actions.map((name, i) => ({
+            id: `action-${i + 1}`,
+            name,
+            description: name,
+          })),
+          pricing:
+            id === "life-sciences"
+              ? {
+                  starter: "₹50,000/month",
+                  professional: "₹2,00,000/month",
+                  enterprise: "₹5,00,000+/month",
+                }
+              : {
+                  starter: "Contact sales",
+                  professional: "Contact sales",
+                  enterprise: "Contact sales",
+                },
+        };
+      }),
+    );
+  }
+
+  if (path.startsWith("packs/") && method === "GET") {
+    const packId = path.split("/")[1];
+    const pack = getPackWorkspace(packId);
+    if (!pack) return err("Pack not found", 404);
+    return json({
+      id: pack.id,
+      name: pack.name,
+      industry: packId,
+      description: pack.name,
+      agents: pack.agents.map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.outcome,
+        requiresApproval: false,
+      })),
+      workflows: pack.workflows,
+      actions: pack.actions.map((name, i) => ({ id: `action-${i + 1}`, name, description: name })),
+      kpis: pack.kpis,
+      queues: pack.queues,
+      insights: pack.insights,
+    });
+  }
+
+  if (path.match(/^packs\/[^/]+\/agents\/[^/]+\/run$/) && method === "POST") {
+    const [, packId, , agentId] = path.split("/");
+    const pack = getPackWorkspace(packId);
+    if (!pack) return err("Pack not found", 404);
+    const agent = pack.agents.find((a) => a.id === agentId) || pack.agents[0];
+    const query = String(body?.query || agent?.name || pack.name);
+    const citations = await hybridSearch(user.org_id, query, 4);
+    const llm = await completeChat({
+      system: `You are the ${agent?.name || "pack"} agent in the ${pack.name} pack.`,
+      messages: [
+        {
+          role: "user",
+          content: `${query}\n\nKnowledge:\n${citations
+            .map((c, i) => `[${i + 1}] ${c.title}: ${c.content.slice(0, 200)}`)
+            .join("\n")}`,
+        },
+      ],
+    });
+    audit(user.org_id, user.id, "pack_agent_run", packId, { agentId, query });
+    return json({
+      id: uid(),
+      status: "completed",
+      name: `${pack.name}: ${agent?.name}`,
+      agentType: agentId,
+      result: {
+        provider: llm.provider,
+        model: llm.model,
+        summary: llm.content,
+        tokensIn: llm.tokens_in,
+        tokensOut: llm.tokens_out,
+      },
+    });
+  }
+
+  if (path.match(/^packs\/[^/]+\/actions\/[^/]+\/run$/) && method === "POST") {
+    const [, packId, , actionId] = path.split("/");
+    const pack = getPackWorkspace(packId);
+    if (!pack) return err("Pack not found", 404);
+    const query = String(body?.query || body?.input?.query || actionId);
+    const citations = await hybridSearch(user.org_id, query, 4);
+    const llm = await completeChat({
+      system: `You are executing action ${actionId} in the ${pack.name} pack.`,
+      messages: [
+        {
+          role: "user",
+          content: `${query}\n\nKnowledge:\n${citations
+            .map((c, i) => `[${i + 1}] ${c.title}: ${c.content.slice(0, 200)}`)
+            .join("\n")}`,
+        },
+      ],
+    });
+    audit(user.org_id, user.id, "pack_action_run", packId, { actionId, query });
+    return json({
+      id: uid(),
+      status: "completed",
+      name: `${pack.name}: ${actionId}`,
+      result: { provider: llm.provider, model: llm.model, summary: llm.content },
+    });
+  }
+
+  if (path === "connectors/registry" && method === "GET") {
+    return json(
+      ensureSeeded().connectors.map((c) => ({
+        type: c.id,
+        name: c.name,
+        description: c.category || c.name,
+        sandboxFields: ["apiKey"],
+      })),
+    );
+  }
+
+  if (path === "connectors" && method === "GET") {
+    return json(
+      ensureSeeded()
+        .connectors.filter((c) => c.status === "connected")
+        .map((c) => ({
+          id: c.id,
+          type: c.id,
+          name: c.name,
+          mode: "sandbox",
+          status: "connected",
+          lastSyncAt: c.last_sync,
+        })),
+    );
+  }
+
+  if (path === "connectors/connect" && method === "POST") {
+    const type = String(body?.type || body?.id || "");
+    const s = ensureSeeded();
+    const connector = s.connectors.find((c) => c.id === type || c.name === body?.name);
+    if (!connector) return err("Unknown connector type", 400);
+    connector.status = "connected";
+    connector.last_sync = now();
+    audit(user.org_id, user.id, "connector_connect", connector.id);
+    return json({
+      id: connector.id,
+      type: connector.id,
+      name: String(body?.name || connector.name),
+      mode: "sandbox",
+      status: "connected",
+    });
+  }
+
+  if (path.match(/^connectors\/[^/]+\/(test|sync|disconnect)$/) && method === "POST") {
+    const [, id, action] = path.split("/");
+    const s = ensureSeeded();
+    const connector = s.connectors.find((c) => c.id === id);
+    if (!connector) return err("Connector not found", 404);
+    if (action === "disconnect") {
+      connector.status = "available";
+      connector.last_sync = null;
+      return json({ ...connector, status: "disconnected" });
+    }
+    if (action === "test") {
+      return json({
+        success: true,
+        connectorId: id,
+        type: id,
+        mode: "sandbox",
+        message: `Sandbox test OK for ${connector.name}`,
+        latencyMs: 40 + Math.floor(Math.random() * 80),
+      });
+    }
+    connector.status = "connected";
+    connector.last_sync = now();
+    return json({
+      id: uid(),
+      connectorId: id,
+      status: "completed",
+      stats: { recordsProcessed: 20 + Math.floor(Math.random() * 40), mode: "sandbox" },
+    });
+  }
+
+  if (path === "approvals" && method === "GET") {
+    const jobs = ensureSeeded()
+      .jobs.filter(
+        (j) =>
+          j.org_id === user.org_id &&
+          (j.status === "awaiting_approval" || j.requires_approval),
+      )
+      .map((j) => ({
+        id: j.id,
+        title: j.name,
+        status: j.status === "awaiting_approval" ? "pending" : j.status,
+        resourceType: "agent_job",
+        resourceId: j.id,
+        payload: { agent_type: j.agent_type, preview: j.result?.summary || "" },
+      }));
+    return json(jobs);
+  }
+
+  if (path.match(/^approvals\/[^/]+\/(approve|reject)$/) && method === "POST") {
+    const [, id, action] = path.split("/");
+    const s = ensureSeeded();
+    const job = s.jobs.find((j) => j.id === id && j.org_id === user.org_id);
+    if (!job) return err("Approval/job not found", 404);
+    job.status = action === "approve" ? "completed" : "rejected";
+    job.approved = action === "approve";
+    audit(user.org_id, user.id, `approval_${action}`, id);
+    return json({ ok: true, id, status: job.status });
+  }
+
+  if (path === "compliance" || path === "compliance/checklists") {
+    if (method !== "GET") return err("Method not allowed", 405);
+    return json([
+      {
+        id: "soc2",
+        name: "SOC 2",
+        region: "Global",
+        description: "Trust services criteria",
+        items: [
+          { id: "soc2-audit", title: "Immutable audit logging", status: "implemented", owner: "code", notes: "BFF audit store" },
+          { id: "soc2-rbac", title: "RBAC", status: "implemented", owner: "code", notes: "Admin/operator/viewer" },
+        ],
+      },
+      {
+        id: "gdpr",
+        name: "GDPR",
+        region: "EU",
+        description: "EU personal data rights",
+        items: [
+          { id: "gdpr-rights", title: "Data subject rights registry", status: "implemented", owner: "code", notes: "Data-rights module" },
+        ],
+      },
+      {
+        id: "dpdp",
+        name: "DPDP Act 2023",
+        region: "India",
+        description: "India digital personal data protection",
+        items: [
+          { id: "dpdp-consent", title: "Purpose limitation", status: "partial", owner: "code", notes: "Zones modeled" },
+        ],
+      },
+      {
+        id: "cdsco",
+        name: "CDSCO",
+        region: "India",
+        description: "Clinical / drug safety controls",
+        items: [
+          { id: "cdsco-safety", title: "Safety Monitor agent", status: "implemented", owner: "code", notes: "Life Sciences pack" },
+        ],
+      },
+      {
+        id: "rbi",
+        name: "RBI",
+        region: "India",
+        description: "Banking AML/KYC controls",
+        items: [
+          { id: "rbi-aml", title: "AML/KYC agent", status: "implemented", owner: "code", notes: "Banking pack" },
+        ],
+      },
+      {
+        id: "irdai",
+        name: "IRDAI",
+        region: "India",
+        description: "Insurance claims/underwriting governance",
+        items: [
+          { id: "irdai-claims", title: "FNOL → settle workflow", status: "implemented", owner: "code", notes: "Insurance pack" },
+        ],
+      },
+    ]);
+  }
+
+  if (path === "data-rights/zones" && method === "GET") {
+    return json([
+      {
+        id: "zone-clinical",
+        name: "Clinical trial operations",
+        classification: "restricted",
+        residency: "India / EU dual control",
+        purposes: ["trial coordination", "safety reporting"],
+        retentionDays: 2555,
+        systems: ["Memory", "Life Sciences pack"],
+        status: "active",
+      },
+      {
+        id: "zone-banking-kyc",
+        name: "Banking KYC / AML",
+        classification: "restricted",
+        residency: "India",
+        purposes: ["loan origination", "AML screening"],
+        retentionDays: 3650,
+        systems: ["Banking pack", "Eyes"],
+        status: "active",
+      },
+      {
+        id: "zone-insurance-claims",
+        name: "Insurance claims & SIU",
+        classification: "confidential",
+        residency: "India",
+        purposes: ["FNOL", "underwriting", "SIU"],
+        retentionDays: 2920,
+        systems: ["Insurance pack"],
+        status: "active",
+      },
+      {
+        id: "zone-commercial",
+        name: "Commercial CRM sync",
+        classification: "internal",
+        residency: "Multi-region",
+        purposes: ["CRM sync", "billing"],
+        retentionDays: 1095,
+        systems: ["Salesforce", "HubSpot"],
+        status: "review",
+      },
+    ]);
+  }
+
+  if (path === "data-rights/registry" && method === "GET") {
+    return json({
+      zones: 4,
+      frameworks: ["GDPR", "DPDP", "SOC2"],
+      rights: ["access", "rectification", "erasure", "portability", "restrict"],
+    });
+  }
+
+  if (path === "data-rights/review" && method === "POST") {
+    const s = ensureSeeded();
+    const dataset_id = String(body?.zoneId || body?.dataset_id || "zone-review");
+    const review = {
+      dataset_id,
+      decision: "escalate" as const,
+      note: String(body?.reason || "Scheduled data-rights review"),
+      reviewer_id: user.id,
+      created_at: now(),
+    };
+    s.rightsReviews.unshift(review);
+    audit(user.org_id, user.id, "data_rights_review", dataset_id, { decision: "escalate" });
+    return json({ ok: true, review });
+  }
+
+  if (path === "admin/smtp-status" && method === "GET") {
+    const configured = Boolean(process.env.SMTP_HOST);
+    return json({
+      configured,
+      status: configured ? "ready" : "not_configured",
+      host: process.env.SMTP_HOST || null,
+      message: configured
+        ? "SMTP credentials present"
+        : "SMTP not configured — auth emails use console provider",
+    });
+  }
+
+  if (path === "admin/models/status" && method === "GET") {
+    const probe = await probeOpenAI();
+    return json({
+      providers: {
+        openai: { configured: probe.configured, probe },
+        aiService: { configured: false, url: null },
+      },
+      defaultModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
+      embeddingModel: "text-embedding-3-small",
+    });
   }
 
   return err(`Route not found: ${method} /api/v1/${path}`, 404);

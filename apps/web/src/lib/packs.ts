@@ -157,7 +157,6 @@ export const DEFAULT_PACK_ID = "life-sciences";
 
 /** Where a pack opens after login / from marketing CTAs. */
 export function packWorkspaceHref(packId: string) {
-  if (packId === "life-sciences") return "/dashboard";
   return `/packs/${packId}`;
 }
 

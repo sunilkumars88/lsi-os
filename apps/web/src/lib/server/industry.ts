@@ -10,6 +10,42 @@ export type PackWorkspace = {
 };
 
 const PACKS: Record<string, PackWorkspace> = {
+  "life-sciences": {
+    id: "life-sciences",
+    name: "Life Sciences Intelligence",
+    kpis: [
+      { label: "Active trials", value: "14", delta: "+2" },
+      { label: "Enrollment lag", value: "11d", delta: "-3d" },
+      { label: "Safety signals", value: "3 open", delta: "stable" },
+      { label: "HTA readiness", value: "82%", delta: "+5%" },
+    ],
+    queues: [
+      { id: "ls1", title: "CardiaX site activation — Mid-Atlantic", owner: "Trial Ops", priority: "high", status: "open" },
+      { id: "ls2", title: "SAE follow-up SAE-2026-014", owner: "Safety", priority: "high", status: "in_progress" },
+      { id: "ls3", title: "Protocol deviation review — Site 118", owner: "QA", priority: "medium", status: "open" },
+      { id: "ls4", title: "CDSCO dossier pack — OncoPrime", owner: "Regulatory", priority: "medium", status: "open" },
+    ],
+    agents: [
+      { id: "trial_coordinator", name: "Trial Coordinator", last_run: "3m ago", outcome: "42 eligibility matches" },
+      { id: "safety_monitor", name: "Safety Monitor", last_run: "12m ago", outcome: "1 Grade 3 alert" },
+      { id: "protocol_compliance", name: "Protocol Compliance", last_run: "28m ago", outcome: "2 deviations flagged" },
+      { id: "regulatory_docs", name: "Regulatory Docs", last_run: "1h ago", outcome: "CDSCO draft ready" },
+    ],
+    workflows: [
+      { id: "patient_recruitment", name: "Patient Recruitment", status: "ready" },
+      { id: "safety_reporting", name: "Safety Reporting", status: "ready" },
+      { id: "trial_closeout", name: "Trial Closeout", status: "ready" },
+    ],
+    insights: [
+      "CardiaX HFpEF enrollment lag concentrated in 3 APAC sites with IRB delay.",
+      "OpenFDA signal for related SGLT2 class remains stable; continue weekly monitor.",
+    ],
+    actions: [
+      "Run Trial Coordinator on CardiaX eligibility",
+      "Draft safety narrative for SAE-2026-014",
+      "Generate protocol compliance checklist",
+    ],
+  },
   banking: {
     id: "banking",
     name: "Banking & Financial Services",
@@ -23,21 +59,23 @@ const PACKS: Record<string, PackWorkspace> = {
       { id: "b1", title: "High-risk wire review — Corp desk", owner: "Fraud Ops", priority: "high", status: "open" },
       { id: "b2", title: "KYC refresh overdue — SME portfolio", owner: "Onboarding", priority: "medium", status: "in_progress" },
       { id: "b3", title: "Credit exception — mid-market facility", owner: "Credit", priority: "high", status: "open" },
+      { id: "b4", title: "STR draft — case AML-8841", owner: "Compliance", priority: "high", status: "open" },
     ],
     agents: [
-      { id: "ba1", name: "Fraud Triage Agent", last_run: "2m ago", outcome: "12 cases scored" },
-      { id: "ba2", name: "KYC Document Checker", last_run: "11m ago", outcome: "8 docs extracted" },
-      { id: "ba3", name: "Credit Memo Drafter", last_run: "1h ago", outcome: "Awaiting approval" },
+      { id: "loan_originator", name: "Loan Origination", last_run: "5m ago", outcome: "6 apps scored" },
+      { id: "fraud_detector", name: "Fraud Detection", last_run: "2m ago", outcome: "12 cases scored" },
+      { id: "aml_compliance", name: "AML/KYC Compliance", last_run: "18m ago", outcome: "STR draft ready" },
+      { id: "customer_support", name: "Customer Support", last_run: "9m ago", outcome: "24 tickets answered" },
     ],
     workflows: [
-      { id: "bw1", name: "SAR preparation", status: "ready" },
-      { id: "bw2", name: "Onboarding exception path", status: "ready" },
+      { id: "loan_auto_decision", name: "Loan Auto-Decision", status: "ready" },
+      { id: "str_filing", name: "STR Filing", status: "ready" },
     ],
     insights: [
       "Fraud spikes correlate with new device fingerprints in retail banking app.",
       "KYC backlog concentrated in jurisdictions requiring enhanced due diligence.",
     ],
-    actions: ["Run Fraud Triage on overnight alerts", "Approve credit memo draft", "Clear KYC queue top 20"],
+    actions: ["Run loan auto-decision batch", "Triage overnight fraud alerts", "Draft STR for AML-8841"],
   },
   insurance: {
     id: "insurance",
@@ -51,16 +89,21 @@ const PACKS: Record<string, PackWorkspace> = {
     queues: [
       { id: "i1", title: "Complex bodily injury claim", owner: "Claims", priority: "high", status: "open" },
       { id: "i2", title: "Underwriting referral — commercial property", owner: "UW", priority: "medium", status: "in_progress" },
+      { id: "i3", title: "SIU referral — vendor concentration", owner: "SIU", priority: "high", status: "open" },
     ],
     agents: [
-      { id: "ia1", name: "Claims Intake Agent", last_run: "4m ago", outcome: "36 FNOLs classified" },
-      { id: "ia2", name: "SIU Pattern Finder", last_run: "40m ago", outcome: "3 referrals" },
+      { id: "claims_triage", name: "Claims Triage", last_run: "4m ago", outcome: "36 FNOLs classified" },
+      { id: "underwriting", name: "Underwriting", last_run: "22m ago", outcome: "5 referrals packed" },
+      { id: "siu", name: "SIU", last_run: "40m ago", outcome: "3 referrals" },
     ],
     workflows: [
-      { id: "iw1", name: "Fast-track claim settlement", status: "ready" },
-      { id: "iw2", name: "Underwriting referral pack", status: "ready" },
+      { id: "fnol_to_settle", name: "FNOL → Settle", status: "ready" },
+      { id: "underwriting_referral", name: "Underwriting Referral Pack", status: "ready" },
     ],
-    insights: ["Auto glass claims show seasonal surge in Region West.", "SIU model flags vendor concentration risk."],
+    insights: [
+      "Auto glass claims show seasonal surge in Region West.",
+      "IRDAI disclosure templates ready for customer-facing claim updates.",
+    ],
     actions: ["Triage overnight FNOLs", "Generate UW referral brief", "Review SIU referrals"],
   },
   healthcare: {
