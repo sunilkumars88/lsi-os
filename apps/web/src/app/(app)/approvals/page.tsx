@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Badge, Button, Loading, PageHeader, Panel } from "@/components/ui";
-import { api } from "@/lib/api";
+import { api, isNestBackend } from "@/lib/api";
+import { nestApprovalToView, type ApprovalView, type NestApproval } from "@/lib/nest-adapters";
 
-type Job = {
+type BffJob = {
   id: string;
   name: string;
   agent_type: string;
@@ -14,14 +15,31 @@ type Job = {
 };
 
 export default function ApprovalsPage() {
-  const [jobs, setJobs] = useState<Job[]>([]);
+  const nest = isNestBackend();
+  const [jobs, setJobs] = useState<ApprovalView[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
   async function refresh() {
-    const all = await api<Job[]>("/api/v1/agents/jobs");
-    setJobs(all.filter((j) => j.status === "awaiting_approval" || j.requires_approval));
+    if (nest) {
+      const all = await api<NestApproval[]>("/api/v1/approvals");
+      setJobs(all.map(nestApprovalToView));
+    } else {
+      const all = await api<BffJob[]>("/api/v1/agents/jobs");
+      setJobs(
+        all
+          .filter((j) => j.status === "awaiting_approval" || j.requires_approval)
+          .map((j) => ({
+            id: j.id,
+            name: j.name,
+            agent_type: j.agent_type,
+            status: j.status,
+            requires_approval: j.requires_approval,
+            result_preview: j.result_preview,
+          })),
+      );
+    }
     setLoading(false);
   }
 
@@ -36,7 +54,14 @@ export default function ApprovalsPage() {
     setBusy(id);
     setError("");
     try {
-      await api(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
+      if (nest) {
+        await api(`/api/v1/approvals/${id}/approve`, {
+          method: "POST",
+          body: JSON.stringify({ comment: "Approved from UI" }),
+        });
+      } else {
+        await api(`/api/v1/agents/jobs/${id}/approve`, { method: "POST" });
+      }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Approve failed");
@@ -49,7 +74,14 @@ export default function ApprovalsPage() {
     setBusy(id);
     setError("");
     try {
-      await api(`/api/v1/agents/jobs/${id}/reject`, { method: "POST" });
+      if (nest) {
+        await api(`/api/v1/approvals/${id}/reject`, {
+          method: "POST",
+          body: JSON.stringify({ comment: "Rejected from UI" }),
+        });
+      } else {
+        await api(`/api/v1/agents/jobs/${id}/reject`, { method: "POST" });
+      }
       await refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Reject failed");
@@ -60,6 +92,10 @@ export default function ApprovalsPage() {
 
   if (loading) return <Loading />;
 
+  const pending = jobs.filter(
+    (j) => j.status === "awaiting_approval" || j.status === "pending",
+  );
+
   return (
     <div>
       <PageHeader
@@ -68,7 +104,7 @@ export default function ApprovalsPage() {
       />
       {error ? <p className="mb-3 text-sm text-[var(--danger)]">{error}</p> : null}
       <div className="space-y-3">
-        {jobs.filter((j) => j.status === "awaiting_approval").map((j) => (
+        {pending.map((j) => (
           <Panel key={j.id}>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -77,7 +113,9 @@ export default function ApprovalsPage() {
                   <Badge tone="warn">{j.status}</Badge>
                   <Badge>{j.agent_type}</Badge>
                 </div>
-                <p className="mt-2 text-sm text-[var(--ink-muted)]">{j.result_preview || "Awaiting review"}</p>
+                <p className="mt-2 text-sm text-[var(--ink-muted)]">
+                  {j.result_preview || "Awaiting review"}
+                </p>
               </div>
               <div className="flex gap-2">
                 <Button disabled={busy === j.id} onClick={() => approve(j.id)}>
@@ -90,10 +128,13 @@ export default function ApprovalsPage() {
             </div>
           </Panel>
         ))}
-        {!jobs.filter((j) => j.status === "awaiting_approval").length ? (
+        {!pending.length ? (
           <Panel>
             <p className="text-sm text-[var(--ink-muted)]">
-              No pending approvals. Run a Safety or Regulatory agent in Agent Runtime to create a review item.
+              No pending approvals.{" "}
+              {nest
+                ? "Run a workflow with an approval node to create a review item."
+                : "Run a Safety or Regulatory agent in Agent Runtime to create a review item."}
             </p>
           </Panel>
         ) : null}
